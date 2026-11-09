@@ -7,6 +7,7 @@
 #include <QUdpSocket>
 
 #include "Network/PSKReporter.hpp"
+#include "Network/PSKReporterIPFIX.hpp"
 
 namespace
 {
@@ -100,6 +101,99 @@ class TestPSKReporterTransport final : public QObject
   Q_OBJECT
 
 private slots:
+  void logAllSlots_data()
+  {
+    QTest::addColumn<QDateTime>("slotStart");
+    QTest::addColumn<double>("period");
+    QTest::addColumn<bool>("logAll");
+    auto const base = QDateTime::fromSecsSinceEpoch(0, Qt::UTC);
+    // FT8: slots of 15 s, so slots 0..3 of every 12 (one minute in three).
+    QTest::newRow("FT8 slot 0") << base << 15.0 << true;
+    QTest::newRow("FT8 slot 3") << base.addSecs(45) << 15.0 << true;
+    QTest::newRow("FT8 slot 4") << base.addSecs(60) << 15.0 << false;
+    QTest::newRow("FT8 slot 11") << base.addSecs(165) << 15.0 << false;
+    QTest::newRow("FT8 slot 12") << base.addSecs(180) << 15.0 << true;
+    QTest::newRow("FT8 now") << QDateTime {{2026, 11, 9}, {12, 0, 45}, Qt::UTC} << 15.0
+                             << ((QDateTime {{2026, 11, 9}, {12, 0, 45}, Qt::UTC}.toSecsSinceEpoch() / 15) % 12 < 4);
+    // FT4: slots of 7.5 s, whose spot times are rounded down to the second.
+    QTest::newRow("FT4 slot 1 at 7 s") << base.addSecs(7) << 7.5 << true;
+    QTest::newRow("FT4 slot 3 at 22 s") << base.addSecs(22) << 7.5 << true;
+    QTest::newRow("FT4 slot 4 at 30 s") << base.addSecs(30) << 7.5 << false;
+    QTest::newRow("FT4 slot 12 at 90 s") << base.addSecs(90) << 7.5 << true;
+    QTest::newRow("no period") << base << 0.0 << false;
+  }
+
+  void logAllSlots()
+  {
+    QFETCH(QDateTime, slotStart);
+    QFETCH(double, period);
+    QFETCH(bool, logAll);
+    QCOMPARE(PSKReporter::isLogAllSlot(slotStart, period), logAll);
+  }
+
+  void logAllBypassesRepeatFilterAndUpdatesIt()
+  {
+    QUdpSocket receiver;
+    QVERIFY(receiver.bind(QHostAddress {QHostAddress::LocalHost}, 0));
+    PSKReporter reporter {options(false, receiver.localPort())};
+    reporter.setLocalStation("K1ABC", "FN21", "N/A", "N/A");
+    QDateTime const time {{2026, 11, 9}, {12, 0, 0}, Qt::UTC};
+    auto spot = [&](QString const& call, bool logAll) {
+      reporter.addRemoteStation(call, "FN20", 14074000u, "FT8", -10, time, {}, logAll);
+    };
+
+    spot("K1RPT", false);
+    spot("K1RPT", false);           // a repeat within the cache timeout: dropped
+    spot("K1RPT", true);            // log all: sent anyway
+    spot("K2LOG", true);
+    spot("K2LOG", false);           // the log-all spot counts as K2LOG's latest
+    reporter.sendReport();
+
+    QByteArray received;
+    QTRY_VERIFY_WITH_TIMEOUT(([&] {
+      while (receiver.hasPendingDatagrams()) {
+        QByteArray payload;
+        payload.resize(static_cast<int>(receiver.pendingDatagramSize()));
+        receiver.readDatagram(payload.data(), payload.size());
+        received += payload;
+      }
+      return received.contains("K2LOG");
+    }()), 5000);
+    QCOMPARE(received.count("K1RPT"), 2);
+    QCOMPARE(received.count("K2LOG"), 1);
+    reporter.sendReport(true);
+  }
+
+  void logAllSendsMessagesNamingNoSender()
+  {
+    QUdpSocket receiver;
+    QVERIFY(receiver.bind(QHostAddress {QHostAddress::LocalHost}, 0));
+    PSKReporter reporter {options(false, receiver.localPort())};
+    reporter.setLocalStation("K1ABC", "FN21", "N/A", "N/A");
+    QDateTime const time {{2026, 11, 9}, {12, 0, 0}, Qt::UTC};
+    // Two telemetry messages: no call, no grid, told apart by their bits.
+    PSKReporterIPFIX::SpotExtras first;
+    first.payload77 = QByteArray::fromHex("123456789ABCDEF01228");
+    PSKReporterIPFIX::SpotExtras second;
+    second.payload77 = QByteArray::fromHex("FEDCBA987654321012A8");
+    reporter.addRemoteStation("", "", 14074000u, "FT8", -10, time, first, true);
+    reporter.addRemoteStation("", "", 14074100u, "FT8", -12, time, second, true);
+    reporter.sendReport();
+
+    QByteArray received;
+    QTRY_VERIFY_WITH_TIMEOUT(([&] {
+      while (receiver.hasPendingDatagrams()) {
+        QByteArray payload;
+        payload.resize(static_cast<int>(receiver.pendingDatagramSize()));
+        receiver.readDatagram(payload.data(), payload.size());
+        received += payload;
+      }
+      return received.contains(second.payload77);
+    }()), 5000);
+    QVERIFY(received.contains(first.payload77));
+    reporter.sendReport(true);
+  }
+
   void sendsAllIpfixReportsOverUdp()
   {
     QUdpSocket receiver;

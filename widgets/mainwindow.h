@@ -1584,6 +1584,10 @@ private:
   void pskPost(DecodedText const& decodedtext,
                DecodeOperatingContext const& context,
                DecoderIpc::DecodeEvidence const* evidence = nullptr);
+  QDateTime pskSpotTime (DecodedText const& decodedtext,
+                         DecodeOperatingContext const& context) const;
+  bool pskLogAll (DecodedText const& decodedtext,
+                  DecodeOperatingContext const& context) const;
   void displayDialFrequency ();
   void transmitDisplay (bool);
   void handleDecodeSelection(QString const& line, Qt::KeyboardModifiers modifiers,

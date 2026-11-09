@@ -6,6 +6,7 @@
 //
 // Reports will be sent in batch mode every 5 minutes.
 
+#include <cmath>
 #include <fstream>
 #include <string>
 #include <ctime>
@@ -364,7 +365,7 @@ void PSKReporter::setLocalStation (QString const& call, QString const& gridSquar
 
 bool PSKReporter::addRemoteStation (QString const& call, QString const& grid, Radio::Frequency freq
                                      , QString const& mode, int snr, QDateTime qSpotTime
-                                     , PSKReporterIPFIX::SpotExtras const& extras)
+                                     , PSKReporterIPFIX::SpotExtras const& extras, bool logAll)
 {
   LOG_LOG_LOCATION (m_->logger_, trace, "call: " << qPrintable (call) << " grid: " << qPrintable (grid) << " freq: " << freq << " mode: " << qPrintable (mode) << " snr: " << snr);
   m_->check_connection ();
@@ -379,10 +380,11 @@ bool PSKReporter::addRemoteStation (QString const& call, QString const& grid, Ra
 
   QDateTime qdateNow = QDateTime::currentDateTime().toUTC();
   // We allow all spots through +/- 6 hours around an eclipse for the HamSCI group.
-  if (!spot_cache.contains(call) || freq > 49000000 || eclipse_active(qdateNow))
+  if (logAll || !spot_cache.contains(call) || freq > 49000000 || eclipse_active(qdateNow))
     {
       m_->spots_.enqueue ({call, grid, snr, freq, mode, qSpotTime, extras});
-      spot_cache.insert(call, time(NULL));
+      // A log-all spot of a message naming no sender has no call to remember.
+      if (!call.isEmpty ()) spot_cache.insert(call, time(NULL));
 #ifdef DEBUGPSK
       if (fs.is_open()) fs << "Adding   " << call << " freq=" << freq << " " << spot_cache[call] <<  " count=" << m_->spots_.count() << std::endl;
 #endif
@@ -418,6 +420,15 @@ bool PSKReporter::addRemoteStation (QString const& call, QString const& grid, Ra
       if (tmptime - i.value() > 600) spot_cache.remove(i.key());
   }
   return accepted;
+}
+
+bool PSKReporter::isLogAllSlot (QDateTime const& slotStart, double periodSeconds)
+{
+  if (!slotStart.isValid () || periodSeconds <= 0) return false;
+  auto const seconds = static_cast<double> (slotStart.toMSecsSinceEpoch ()) / 1000.0;
+  auto const slot = static_cast<qint64> (std::floor (seconds / periodSeconds + 0.5));
+  auto const position = ((slot % LOG_ALL_INTERVAL_SLOTS) + LOG_ALL_INTERVAL_SLOTS) % LOG_ALL_INTERVAL_SLOTS;
+  return position < LOG_ALL_CONSECUTIVE_SLOTS;
 }
 
 void PSKReporter::sendReport (bool last)

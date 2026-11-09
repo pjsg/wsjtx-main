@@ -3193,7 +3193,7 @@ void MainWindow::fastSink(qint64 frames)
     write_all("Rx",message);
     bool stdMsg = decodedtext.report(m_baseCall,
                   Radio::base_callsign(ui->dxCallEntry->text()),m_rptRcvd);
-    if (stdMsg) pskPost (decodedtext);
+    if (stdMsg || pskLogAll (decodedtext, currentDecodeOperatingContext ())) pskPost (decodedtext);
     if(ui->actionEnable_QSY_Popups->isChecked() || m_qsymonitorWidget) showQSYMessage(message);
   }
 
@@ -5920,7 +5920,7 @@ void::MainWindow::fast_decode_done()
                     Radio::base_callsign(ui->dxCallEntry->text()), m_rptRcvd);
 
 // extract details and send to PSKreporter
-      if (stdMsg) pskPost (decodedtext);
+      if (stdMsg || pskLogAll (decodedtext, currentDecodeOperatingContext ())) pskPost (decodedtext);
     }
     if (tmax >= 0.0) auto_sequence (decodedtext, ui->sbFtol->value (), ui->sbFtol->value ());
   }
@@ -7465,7 +7465,8 @@ void MainWindow::readFromStdout()                             //readFromStdout
           QDateTime::currentMSecsSinceEpoch()/1000-m_secBandChanged > int(4*m_TRperiod)/5;
         if (DecodeOutputPlan::shouldPostPsk(decodeContext.mode, decodeContext.specOp,
                                             decodeContext.superFox,
-                                            stdMsg, okToPost)) {
+                                            stdMsg || pskLogAll (decodedtext, decodeContext),
+                                            okToPost)) {
           if(m_mode=="FST4W") {
             line_read=line_read.left(22) + " CQ " + line_read.trimmed().mid(22);
             auto p = line_read.lastIndexOf (' ');
@@ -7542,6 +7543,22 @@ void MainWindow::pskPost (DecodedText const& decodedtext)
   pskPost (decodedtext, currentDecodeOperatingContext ());
 }
 
+// The start of the timeslot a decode was received in.
+QDateTime MainWindow::pskSpotTime (DecodedText const& decodedtext,
+                                   DecodeOperatingContext const& context) const
+{
+  return DecodedTime::spotTime (decodedtext.string ().section (' ', 0, 0),
+                                QDateTime::currentDateTimeUtc (), context.trPeriod);
+}
+
+// True when the decode falls in a PSK Reporter log-all timeslot, in which
+// every decoded message is reported, whatever it contains.
+bool MainWindow::pskLogAll (DecodedText const& decodedtext,
+                            DecodeOperatingContext const& context) const
+{
+  return PSKReporter::isLogAllSlot (pskSpotTime (decodedtext, context), context.trPeriod);
+}
+
 void MainWindow::pskPost (DecodedText const& decodedtext,
                           DecodeOperatingContext const& context,
                           DecoderIpc::DecodeEvidence const* evidence)
@@ -7549,9 +7566,7 @@ void MainWindow::pskPost (DecodedText const& decodedtext,
   auto const baseCall = Radio::base_callsign (context.myCall);
   if (context.diskData || !m_config.spot_to_psk_reporter() || decodedtext.isLowConfidence ()
       || (decodedtext.string().contains(baseCall) && decodedtext.string().contains(m_config.my_grid().left(4)))) return; // prevent self-spotting when running multiple instances
-  auto const qSpotTime = DecodedTime::spotTime(
-    decodedtext.string().section(' ', 0, 0),
-    QDateTime::currentDateTimeUtc(), context.trPeriod);
+  auto const qSpotTime = pskSpotTime (decodedtext, context);
   if (!qSpotTime.isValid()) return;
   QString msgmode=context.mode;
   QString deCall;
@@ -7583,9 +7598,23 @@ void MainWindow::pskPost (DecodedText const& decodedtext,
     frequency = context.periodFrequency + wholeHz;
     extras.fractional_frequency = static_cast<quint16> (fraction);
   }
-  if(grid.contains (MainWindow::grid_regexp)  || decodedtext.string().contains(" CQ ")) {
+  // In log-all timeslots every decoded message is reported, free text and
+  // telemetry included; otherwise only those from a known sender carrying a
+  // grid or calling CQ.
+  bool const logAll = PSKReporter::isLogAllSlot (qSpotTime, context.trPeriod);
+  // Free text and telemetry name no sender, and their words are not a call
+  // and grid. FST4W arrives here rebuilt as "CQ <call> <grid>".
+  if (!decodedtext.isStandardMessage () && "FST4W" != context.mode) {
+    deCall.clear ();
+    grid.clear ();
+  }
+  if ("..." == deCall) deCall.clear ();  // an unresolved hashed call
+  bool const hasGrid = grid.contains (MainWindow::grid_regexp);
+  if (!logAll && deCall.isEmpty ()) return;
+  if(logAll || hasGrid || decodedtext.string().contains(" CQ ")) {
+    if (!hasGrid) grid.clear ();  // a report or exchange, not a locator
 //    qDebug() << "To PSKreporter:" << deCall << grid << frequency << msgmode << snr;
-    if (!m_psk_Reporter.addRemoteStation (deCall, grid, frequency, msgmode, snr, qSpotTime, extras))
+    if (!m_psk_Reporter.addRemoteStation (deCall, grid, frequency, msgmode, snr, qSpotTime, extras, logAll))
       {
         showStatusMessage (tr ("PSK Reporter spot queue full; oldest spot dropped"));
       }
