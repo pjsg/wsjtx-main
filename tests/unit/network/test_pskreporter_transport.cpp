@@ -39,7 +39,7 @@ namespace
 
     auto const ids = setIds(payload);
     QVERIFY(ids.contains(quint16(0x50e2)));
-    QVERIFY(ids.contains(quint16(0x50e3)));
+    QVERIFY(ids.contains(quint16(0x50e4)));
     QCOMPARE(ids.contains(quint16(2)), includeDescriptors);
     QCOMPARE(ids.contains(quint16(3)), includeDescriptors);
   }

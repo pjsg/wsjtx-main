@@ -78,7 +78,8 @@ namespace
       -10,
       static_cast<Radio::Frequency>(qRound64(frequencyMHz * 1000000)),
       mode,
-      spotTime
+      spotTime,
+      {}                        // map65 does not report message bits
     };
     return true;
   }

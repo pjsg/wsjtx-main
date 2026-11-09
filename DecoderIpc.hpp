@@ -187,6 +187,11 @@ namespace DecoderIpc
   bool consume (shared_dec_data_t& shared, qint32 generation);
   bool parseStart (QByteArray line, qint32 * generation);
   bool parseCompletion (QByteArray line, Completion * completion);
+
+  // jt9 writes "<DecodePayload77> " and 20 hex digits on the line before an
+  // FT8 or FT4 decode it received as 77 message bits. On success *payload77
+  // holds 10 bytes: the bits first bit most significant, then three zero bits.
+  bool parsePayload77 (QByteArray line, QByteArray * payload77);
 }
 
 #endif

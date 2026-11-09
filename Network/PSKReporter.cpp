@@ -363,7 +363,8 @@ void PSKReporter::setLocalStation (QString const& call, QString const& gridSquar
 }
 
 bool PSKReporter::addRemoteStation (QString const& call, QString const& grid, Radio::Frequency freq
-                                     , QString const& mode, int snr, QDateTime qSpotTime)
+                                     , QString const& mode, int snr, QDateTime qSpotTime
+                                     , QByteArray const& payload77)
 {
   LOG_LOG_LOCATION (m_->logger_, trace, "call: " << qPrintable (call) << " grid: " << qPrintable (grid) << " freq: " << freq << " mode: " << qPrintable (mode) << " snr: " << snr);
   m_->check_connection ();
@@ -380,7 +381,7 @@ bool PSKReporter::addRemoteStation (QString const& call, QString const& grid, Ra
   // We allow all spots through +/- 6 hours around an eclipse for the HamSCI group.
   if (!spot_cache.contains(call) || freq > 49000000 || eclipse_active(qdateNow))
     {
-      m_->spots_.enqueue ({call, grid, snr, freq, mode, qSpotTime});
+      m_->spots_.enqueue ({call, grid, snr, freq, mode, qSpotTime, payload77});
       spot_cache.insert(call, time(NULL));
 #ifdef DEBUGPSK
       if (fs.is_open()) fs << "Adding   " << call << " freq=" << freq << " " << spot_cache[call] <<  " count=" << m_->spots_.count() << std::endl;
@@ -388,7 +389,7 @@ bool PSKReporter::addRemoteStation (QString const& call, QString const& grid, Ra
     }
   else if (time(NULL) - spot_cache[call] > CACHE_TIMEOUT)
     {
-      m_->spots_.enqueue ({call, grid, snr, freq, mode, qSpotTime});
+      m_->spots_.enqueue ({call, grid, snr, freq, mode, qSpotTime, payload77});
 #ifdef DEBUGPSK
       if (fs.is_open()) fs << "Adding # " << call << spot_cache[call] << " count=" << m_->spots_.count() << std::endl;
 #endif

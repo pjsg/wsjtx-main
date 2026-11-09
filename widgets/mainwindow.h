@@ -1148,6 +1148,8 @@ private:
   bool    m_generated_message_error;
   bool    m_startAnother;
   ActiveJt9Decode m_activeJt9Decode;
+  // 77 message bits jt9 reported for the decode line that follows
+  QByteArray m_pendingPayload77;
   Ft8MtdDecodeCoordinator m_ft8MtdDecodeCoordinator;
 #if defined (WSJT_ENABLE_LIVE_AUDIO_TEST)
   qint64 m_liveAudioTestPendingFt8FinalPeriod {-1};
@@ -1577,7 +1579,8 @@ private:
   void pskSetLocal ();
   void pskPost(DecodedText const& decodedtext);
   void pskPost(DecodedText const& decodedtext,
-               DecodeOperatingContext const& context);
+               DecodeOperatingContext const& context,
+               QByteArray const& payload77 = {});
   void displayDialFrequency ();
   void transmitDisplay (bool);
   void handleDecodeSelection(QString const& line, Qt::KeyboardModifiers modifiers,

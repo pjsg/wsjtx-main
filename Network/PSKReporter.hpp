@@ -34,7 +34,10 @@ public:
   void setLocalStation (QString const& call, QString const& grid, QString const& antenna, QString const& rigInformation);
 
   // Returns false if accepting the spot required dropping an older pending spot.
-  bool addRemoteStation (QString const& call, QString const& grid, Radio::Frequency freq, QString const& mode, int snr, QDateTime spotTime);
+  // payload77 is empty, or the 10-byte form of the 77 message bits the spot
+  // was decoded from (see PSKReporterIPFIX::Spot).
+  bool addRemoteStation (QString const& call, QString const& grid, Radio::Frequency freq, QString const& mode, int snr, QDateTime spotTime
+                         , QByteArray const& payload77 = {});
 
   //
   // Flush any pending spots to PSK Reporter

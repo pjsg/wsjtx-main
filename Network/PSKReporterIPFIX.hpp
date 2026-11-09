@@ -30,6 +30,9 @@ namespace PSKReporterIPFIX
     Radio::Frequency frequency;
     QString mode;
     QDateTime time;
+    // Empty, or the 77 message bits the spot was decoded from as 10 bytes:
+    // first bit most significant, then three zero bits.
+    QByteArray payload77;
   };
 
   struct Packet

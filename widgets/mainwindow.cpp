@@ -4,6 +4,7 @@
 #include "FastDecode.hpp"
 
 #include <array>
+#include <utility>
 #include <QAudio>
 #include <QAudioOutput>
 #include <QSound>
@@ -94,6 +95,7 @@
 #include "Detector/Detector.hpp"
 #include "DecDataMutex.hpp"
 #include "ShmemDecoderBackend.hpp"
+#include "DecoderIpc.hpp"
 #include "qmap/qmap_ipc.h"
 #include "qmap/qmap_decode_record.h"
 #include "qmap/qmap_click_policy.h"
@@ -7074,7 +7076,11 @@ void MainWindow::readFromStdout()                             //readFromStdout
     [this, &all_decodes, &preparationContext, &decodeCompleted,
      &decodeContext, bDisplayPoints]
     (DecoderBackend::Output const& output) {
+    // A payload line belongs only to the decode line that follows it.
+    if (DecoderBackend::Output::Kind::Record != output.kind) m_pendingPayload77.clear ();
     if (handleDecoderOutput (output, decodeCompleted)) return;
+    if (DecoderIpc::parsePayload77 (output.text, &m_pendingPayload77)) return;
+    auto const payload77 = std::exchange (m_pendingPayload77, QByteArray {});
     filtered = false;
     ignored = false;
     m_muted = false;
@@ -7459,7 +7465,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
             DecodedText FST4W_post {QString::fromUtf8 (line_read.left (p).constData ())};
             pskPost(FST4W_post, decodeContext);
           } else {
-            pskPost(decodedtext, decodeContext);
+            pskPost(decodedtext, decodeContext, payload77);
           }
         }
         if((m_mode=="JT4" or m_mode=="JT65" or m_mode=="Q65")
@@ -7530,7 +7536,8 @@ void MainWindow::pskPost (DecodedText const& decodedtext)
 }
 
 void MainWindow::pskPost (DecodedText const& decodedtext,
-                          DecodeOperatingContext const& context)
+                          DecodeOperatingContext const& context,
+                          QByteArray const& payload77)
 {
   auto const baseCall = Radio::base_callsign (context.myCall);
   if (context.diskData || !m_config.spot_to_psk_reporter() || decodedtext.isLowConfidence ()
@@ -7551,7 +7558,7 @@ void MainWindow::pskPost (DecodedText const& decodedtext,
   Frequency frequency = context.periodFrequency + audioFrequency;
   if(grid.contains (MainWindow::grid_regexp)  || decodedtext.string().contains(" CQ ")) {
 //    qDebug() << "To PSKreporter:" << deCall << grid << frequency << msgmode << snr;
-    if (!m_psk_Reporter.addRemoteStation (deCall, grid, frequency, msgmode, snr, qSpotTime))
+    if (!m_psk_Reporter.addRemoteStation (deCall, grid, frequency, msgmode, snr, qSpotTime, payload77))
       {
         showStatusMessage (tr ("PSK Reporter spot queue full; oldest spot dropped"));
       }

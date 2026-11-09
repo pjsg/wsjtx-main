@@ -36,6 +36,27 @@ namespace
     return ids;
   }
 
+  // Offset of the first set with this ID, or -1.
+  int setOffset (QByteArray const& payload, quint16 set_id)
+  {
+    int offset = 16;
+    while (offset + 4 <= payload.size ())
+      {
+        auto const length = u16 (payload, offset + 2);
+        if (u16 (payload, offset) == set_id) return offset;
+        if (length < 4) break;
+        offset += length;
+      }
+    return -1;
+  }
+
+  // Skips one record field; a length of 0xffff in the template means a
+  // length-prefixed field (one-byte prefix in these records).
+  int skipField (QByteArray const& payload, int offset, quint16 length)
+  {
+    return 0xffff == length ? offset + 1 + static_cast<quint8> (payload[offset]) : offset + length;
+  }
+
   PSKReporterIPFIX::Receiver receiver ()
   {
     return {"K1ABC", "FN20", "WSJT-X test", "N/A", "N/A"};
@@ -49,7 +70,8 @@ namespace
       -10,
       14074000u + static_cast<quint64> (index),
       "FT8",
-      QDateTime {{2026, 5, 6}, {12, 0, 0}, Qt::UTC}
+      QDateTime {{2026, 5, 6}, {12, 0, 0}, Qt::UTC},
+      {}
     };
   }
 
@@ -109,7 +131,7 @@ private slots:
     auto long_text = QString (300, QChar {0x00f8});
     PSKReporterIPFIX::Receiver rx {long_text, long_text, long_text, long_text, long_text};
     QList<PSKReporterIPFIX::Spot> spots {
-      {long_text, long_text, -1, 50313000u, long_text, QDateTime {{2026, 5, 6}, {12, 0, 0}, Qt::UTC}}
+      {long_text, long_text, -1, 50313000u, long_text, QDateTime {{2026, 5, 6}, {12, 0, 0}, Qt::UTC}, {}}
     };
 
     auto const packets = buildUdpPackets (rx, spots, true, 1, 2, 3);
@@ -194,8 +216,63 @@ private slots:
       {
         auto const ids = setIds (packet.payload);
         QVERIFY (ids.contains (quint16 (0x50e2)));
-        QVERIFY (ids.contains (quint16 (0x50e3)));
+        QVERIFY (ids.contains (quint16 (0x50e4)));
       }
+  }
+
+  void senderTemplateDeclaresMessageBits ()
+  {
+    auto const packets = buildUdpPackets (receiver (), {}, true, 1, 2, 3);
+    auto const payload = packets.front ().payload;
+
+    auto const offset = setOffset (payload, 2u);
+    QVERIFY (offset >= 0);
+    QCOMPARE (u16 (payload, offset + 4), quint16 (0x50e4));
+    QCOMPARE (u16 (payload, offset + 6), quint16 (8u));
+    // The eighth field specifier follows six enterprise fields (8 bytes each)
+    // and dateTimeSeconds (4 bytes).
+    auto const field = offset + 8 + 6 * 8 + 4;
+    QCOMPARE (u16 (payload, field), quint16 (0x8000 + 14u));
+    QCOMPARE (u16 (payload, field + 2), quint16 (0xffff));
+    QCOMPARE (u32 (payload, field + 4), quint32 (30351u));
+    QCOMPARE (field + 8, offset + u16 (payload, offset + 2));
+  }
+
+  void spotRecordCarriesMessageBits_data ()
+  {
+    QTest::addColumn<QByteArray> ("bits");
+    QTest::addColumn<QByteArray> ("expected");
+    auto const bits = QByteArray::fromHex ("0123456789ABCDEF0120");
+    QTest::newRow ("known") << bits << bits;
+    QTest::newRow ("unknown") << QByteArray {} << QByteArray {};
+    QTest::newRow ("wrong size dropped") << QByteArray::fromHex ("0123") << QByteArray {};
+  }
+
+  void spotRecordCarriesMessageBits ()
+  {
+    QFETCH (QByteArray, bits);
+    QFETCH (QByteArray, expected);
+    auto s = spot (1);
+    s.payload77 = bits;
+
+    auto const packets = buildUdpPackets (receiver (), {s}, false, 1, 2, 3);
+    QCOMPARE (packets.size (), 1);
+    auto const payload = packets.front ().payload;
+    auto const set = setOffset (payload, 0x50e4);
+    QVERIFY (set >= 0);
+
+    // Field lengths of template 0x50e4, in order.
+    int offset = set + 4;
+    for (quint16 length : {quint16 (0xffff), quint16 (5u), quint16 (1u), quint16 (0xffff)
+                           , quint16 (0xffff), quint16 (1u), quint16 (4u)})
+      {
+        offset = skipField (payload, offset, length);
+      }
+    QCOMPARE (static_cast<int> (static_cast<quint8> (payload[offset])), expected.size ());
+    QCOMPARE (payload.mid (offset + 1, expected.size ()), expected);
+    // Only alignment padding follows the record.
+    auto const end = set + u16 (payload, set + 2);
+    QVERIFY (end - (offset + 1 + expected.size ()) < 4);
   }
 
   void tcpCanUseLargerIpfixPayloads ()

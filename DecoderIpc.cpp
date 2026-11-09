@@ -516,6 +516,28 @@ bool DecoderIpc::parseStart (QByteArray line, qint32 * generation)
   return true;
 }
 
+bool DecoderIpc::parsePayload77 (QByteArray line, QByteArray * payload77)
+{
+  if (!payload77) return false;
+  if (line.endsWith ('\n')) line.chop (1);
+  if (line.endsWith ('\r')) line.chop (1);
+
+  QByteArray const prefix {"<DecodePayload77> "};
+  constexpr int hexDigits {20};
+  if (!line.startsWith (prefix) || line.size () != prefix.size () + hexDigits) return false;
+  auto const hex = line.mid (prefix.size ());
+  for (auto const character : hex)
+    {
+      if (!((character >= '0' && character <= '9') || (character >= 'A' && character <= 'F')))
+        return false;
+    }
+  auto const bytes = QByteArray::fromHex (hex);
+  // The three bits after the 77 message bits are always zero.
+  if (bytes.size () != hexDigits / 2 || (static_cast<quint8> (bytes.back ()) & 0x07)) return false;
+  *payload77 = bytes;
+  return true;
+}
+
 bool DecoderIpc::parseCompletion (QByteArray line, Completion * completion)
 {
   if (!completion) return false;

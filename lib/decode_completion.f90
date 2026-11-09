@@ -9,6 +9,12 @@ module decode_completion_module
   public :: set_decode_completion
   public :: write_decode_completion
   public :: write_decode_progress
+  public :: enable_decode_payload_records
+  public :: write_decode_payload_record
+
+  ! Under the GUI, jt9 precedes a decode line with the 77 message bits it
+  ! was decoded from. Standalone jt9 output is left unchanged.
+  logical, save :: payload_records_enabled = .false.
 
   type :: decode_completion_result
      logical :: available = .false.
@@ -86,5 +92,32 @@ contains
     progress_thread_rate = rate
     call decoder_ipc_progress_report(generation)
   end subroutine write_decode_progress
+
+  subroutine enable_decode_payload_records()
+    payload_records_enabled = .true.
+  end subroutine enable_decode_payload_records
+
+  ! Writes '<DecodePayload77> ' and 20 hex digits: the 77 bits, first bit
+  ! most significant, then three zero bits.
+  subroutine write_decode_payload_record(payload77)
+    use iso_fortran_env, only: int8
+    integer(int8), intent(in) :: payload77(77)
+    character(len=16), parameter :: digits = '0123456789ABCDEF'
+    character(len=20) :: hex
+    integer :: i, j, nibble
+
+    if (.not. payload_records_enabled) return
+    do i = 1, 20
+       nibble = 0
+       do j = 1, 4
+          nibble = 2 * nibble
+          if (4 * (i - 1) + j <= 77) then
+             if (payload77(4 * (i - 1) + j) /= 0) nibble = nibble + 1
+          end if
+       end do
+       hex(i:i) = digits(nibble + 1:nibble + 1)
+    end do
+    write(*,'(a,a)') '<DecodePayload77> ', hex
+  end subroutine write_decode_payload_record
 
 end module decode_completion_module

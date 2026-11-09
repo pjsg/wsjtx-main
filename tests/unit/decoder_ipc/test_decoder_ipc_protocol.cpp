@@ -45,6 +45,9 @@ private Q_SLOTS:
   void completionMarkerParsing ();
   void completionMarkerRejections_data ();
   void completionMarkerRejections ();
+  void payloadMarkerParsing ();
+  void payloadMarkerRejections_data ();
+  void payloadMarkerRejections ();
 };
 
 void TestDecoderIpcProtocol::layoutMatchesFortran ()
@@ -525,6 +528,34 @@ void TestDecoderIpcProtocol::completionMarkerRejections ()
   QFETCH (QByteArray, line);
   DecoderIpc::Completion completion {};
   QVERIFY (!DecoderIpc::parseCompletion (line, &completion));
+}
+
+void TestDecoderIpcProtocol::payloadMarkerParsing ()
+{
+  QByteArray payload77;
+  QVERIFY (DecoderIpc::parsePayload77 ("<DecodePayload77> 0123456789ABCDEF0120\r\n", &payload77));
+  QCOMPARE (payload77, QByteArray::fromHex ("0123456789ABCDEF0120"));
+}
+
+void TestDecoderIpcProtocol::payloadMarkerRejections_data ()
+{
+  QTest::addColumn<QByteArray> ("line");
+  QTest::newRow ("decode line") << QByteArray {"133430 -12  0.1 1234 ~  CQ K1ABC FN42"};
+  QTest::newRow ("embedded") << QByteArray {"noise <DecodePayload77> 0123456789ABCDEF0120"};
+  QTest::newRow ("short") << QByteArray {"<DecodePayload77> 0123456789ABCDEF012"};
+  QTest::newRow ("long") << QByteArray {"<DecodePayload77> 0123456789ABCDEF01200"};
+  QTest::newRow ("lower case") << QByteArray {"<DecodePayload77> 0123456789abcdef0120"};
+  QTest::newRow ("not hex") << QByteArray {"<DecodePayload77> 0123456789ABCDEF012G"};
+  QTest::newRow ("padding bits set") << QByteArray {"<DecodePayload77> 0123456789ABCDEF0121"};
+  QTest::newRow ("trailing garbage") << QByteArray {"<DecodePayload77> 0123456789ABCDEF0120 x"};
+}
+
+void TestDecoderIpcProtocol::payloadMarkerRejections ()
+{
+  QFETCH (QByteArray, line);
+  QByteArray payload77 {"unchanged"};
+  QVERIFY (!DecoderIpc::parsePayload77 (line, &payload77));
+  QCOMPARE (payload77, QByteArray {"unchanged"});
 }
 
 QTEST_GUILESS_MAIN (TestDecoderIpcProtocol)
