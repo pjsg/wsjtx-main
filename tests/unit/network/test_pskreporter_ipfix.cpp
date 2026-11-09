@@ -251,7 +251,9 @@ private slots:
     auto const bits = QByteArray::fromHex ("0123456789ABCDEF0120");
     QTest::newRow ("known") << bits << bits << qint16 (-1234) << quint16 (0x8000);
     QTest::newRow ("unknown") << QByteArray {} << QByteArray {} << PSKReporterIPFIX::DELTA_T_UNKNOWN << quint16 (0);
-    QTest::newRow ("wrong size dropped") << QByteArray::fromHex ("0123") << QByteArray {} << qint16 (5000) << quint16 (1);
+    auto const bits72 = QByteArray::fromHex ("824C345AB631617EA8");
+    QTest::newRow ("72 bits") << bits72 << bits72 << PSKReporterIPFIX::DELTA_T_UNKNOWN << quint16 (0);
+    QTest::newRow ("oversize dropped") << QByteArray (17, '\x55') << QByteArray {} << qint16 (5000) << quint16 (1);
   }
 
   void spotRecordCarriesDecoderMeasurements ()
@@ -261,7 +263,7 @@ private slots:
     QFETCH (qint16, deltaT);
     QFETCH (quint16, fraction);
     auto s = spot (1);
-    s.extras.payload77 = bits;
+    s.extras.message_bits = bits;
     s.extras.delta_t = deltaT;
     s.extras.fractional_frequency = fraction;
 

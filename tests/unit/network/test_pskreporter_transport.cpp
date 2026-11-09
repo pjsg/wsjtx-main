@@ -173,9 +173,9 @@ private slots:
     QDateTime const time {{2026, 11, 9}, {12, 0, 0}, Qt::UTC};
     // Two telemetry messages: no call, no grid, told apart by their bits.
     PSKReporterIPFIX::SpotExtras first;
-    first.payload77 = QByteArray::fromHex("123456789ABCDEF01228");
+    first.message_bits = QByteArray::fromHex("123456789ABCDEF01228");
     PSKReporterIPFIX::SpotExtras second;
-    second.payload77 = QByteArray::fromHex("FEDCBA987654321012A8");
+    second.message_bits = QByteArray::fromHex("FEDCBA987654321012A8");
     reporter.addRemoteStation("", "", 14074000u, "FT8", -10, time, first, true);
     reporter.addRemoteStation("", "", 14074100u, "FT8", -12, time, second, true);
     reporter.sendReport();
@@ -188,9 +188,9 @@ private slots:
         receiver.readDatagram(payload.data(), payload.size());
         received += payload;
       }
-      return received.contains(second.payload77);
+      return received.contains(second.message_bits);
     }()), 5000);
-    QVERIFY(received.contains(first.payload77));
+    QVERIFY(received.contains(first.message_bits));
     reporter.sendReport(true);
   }
 

@@ -542,23 +542,26 @@ bool DecoderIpc::parseDecodeEvidence (QByteArray line, DecodeEvidence * evidence
       parsed.hasStart = true;
     }
 
-  bool ok {false};
-  parsed.frequencyHz = fields[1].mid (5).toDouble (&ok);
-  if (!ok || !std::isfinite (parsed.frequencyHz) || parsed.frequencyHz < 0) return false;
+  auto const frequency = fields[1].mid (5);
+  if ("none" != frequency)
+    {
+      bool ok {false};
+      parsed.frequencyHz = frequency.toDouble (&ok);
+      if (!ok || !std::isfinite (parsed.frequencyHz) || parsed.frequencyHz < 0) return false;
+      parsed.hasFrequency = true;
+    }
 
   auto const bits = fields[2].mid (5);
   if ("none" != bits)
     {
-      constexpr int hexDigits {20};
-      if (bits.size () != hexDigits) return false;
+      constexpr int maxHexDigits {32};
+      if (bits.isEmpty () || bits.size () > maxHexDigits || bits.size () % 2) return false;
       for (auto const character : bits)
         {
           if (!((character >= '0' && character <= '9') || (character >= 'A' && character <= 'F')))
             return false;
         }
-      parsed.payload77 = QByteArray::fromHex (bits);
-      // The three bits after the 77 message bits are always zero.
-      if (static_cast<quint8> (parsed.payload77.back ()) & 0x07) return false;
+      parsed.messageBits = QByteArray::fromHex (bits);
     }
 
   *evidence = parsed;

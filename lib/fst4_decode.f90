@@ -6,6 +6,7 @@ module fst4_decode
    use fst4_baseline_workspace, only: fst4_baseline_owned
    use fst4_bitmetrics, only: fst4_bitmetrics_workspace,get_fst4_bitmetrics_owned
    use decoder_engine_types, only: fst4_result
+   use decode_completion_module, only: record_decoded_bits
    use packjt77, only: pack77_state,initialize_pack77_state,reset_pack77_state, &
       pack77_for_state,unpack77_for_state
    use, intrinsic :: iso_c_binding
@@ -289,6 +290,7 @@ contains
       integer hmod
       integer*1 apmask(240),cw(240),hdec(240)
       integer*1 message101(101),message74(74),message77(77)
+      integer(1) reported_bits(77)
 
       logical badsync,unpk77_success
       logical nohiscall
@@ -894,6 +896,11 @@ contains
                         result%fmid_hz=fmid
                         result%width_hz=w50
                      endif
+! The message bits for the report: FST4's 77, or FST4W's 50.
+                     do i=1,merge(77,50,iwspr.eq.0)
+                        reported_bits(i)=merge(1_1,0_1,c77(i:i).eq.'1')
+                     enddo
+                     call record_decoded_bits(reported_bits(1:merge(77,50,iwspr.eq.0)))
                      call this%callback(nutc,sync,nsnr,xdt,fsig,msg, &
                         iaptype,qual,ntrperiod,fmid,w50,result)
                      goto 800

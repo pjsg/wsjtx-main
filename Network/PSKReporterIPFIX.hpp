@@ -28,9 +28,11 @@ namespace PSKReporterIPFIX
   // Measurements beyond what the decoded text gives.
   struct SpotExtras
   {
-    // Empty, or the 77 message bits the spot was decoded from as 10 bytes:
-    // first bit most significant, then three zero bits.
-    QByteArray payload77;
+    // Empty, or the message bits the spot was decoded from, first bit most
+    // significant, padded with zero bits to whole bytes: 77 bits in 10 bytes
+    // (FT8, FT4, Q65, MSK144, FST4), 72 in 9 (JT4, JT9, JT65), 50 in 7
+    // (FST4W). The mode says which. At most 16 bytes are sent.
+    QByteArray message_bits;
     // Message start relative to the start of the transmission period, in
     // 100 us units.
     qint16 delta_t {DELTA_T_UNKNOWN};

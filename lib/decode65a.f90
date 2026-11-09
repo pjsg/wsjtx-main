@@ -6,6 +6,7 @@ subroutine decode65a(dd,npts,newdat,nqd,f0,nflip,mode65,ntrials,     &
 
   use jt65_mod
   use timer_module, only: timer
+  use decode_completion_module, only: clear_decoded_bits
 
   parameter (NMAX=60*12000)          !Samples per 60 s
   real*4  dd(NMAX)                   !92 MB: raw data from Linrad timf2
@@ -147,6 +148,7 @@ subroutine decode65a(dd,npts,newdat,nqd,f0,nflip,mode65,ntrials,     &
   enddo
 
   if(nftbest.eq.2) then
+     call clear_decoded_bits()          !A hinted decode: no received bits
      decoded=decoded_best
      qual=qualbest
      nsmo=nsmobest

@@ -322,6 +322,10 @@ extern "C" {
                 bool* bLowSidelobes, int* minw, float* px, float s[], float* df3,
                 int* nhsym, int* npts8, float *m_pxmax, int* npct);
 
+  // The message bits the last decoder in this thread recorded, packed
+  // most significant bit first into up to 16 bytes; clears them.
+  void take_decoded_bytes_c (unsigned char bytes[16], int* nbytes);
+
   void hspec_(short int d2[], int* k, int* nutc0, int* ntrperiod, int* nrxfreq, int* ntol,
               bool* bmsk144, bool* btrain, double const pcoeffs[], int* ingain,
               char const * mycall, char const * hiscall, bool* bshmsg, bool* bswl,
@@ -2894,6 +2898,14 @@ void MainWindow::fastSink(qint64 frames)
 
 
   if(bmsk144 and (line[0]!=0)) {
+    // The 77 bits mskrtd decoded the message from, if it was not a short one
+    DecoderIpc::DecodeEvidence mskEvidence;
+    {
+      unsigned char bytes[16];
+      int nbytes {0};
+      take_decoded_bytes_c (bytes, &nbytes);
+      mskEvidence.messageBits = QByteArray {reinterpret_cast<char const *> (bytes), nbytes};
+    }
     QString message {QString::fromLatin1 (line)};
     DecodedText decodedtext {message.replace (QChar::LineFeed, "")};
 
@@ -3193,7 +3205,9 @@ void MainWindow::fastSink(qint64 frames)
     write_all("Rx",message);
     bool stdMsg = decodedtext.report(m_baseCall,
                   Radio::base_callsign(ui->dxCallEntry->text()),m_rptRcvd);
-    if (stdMsg || pskLogAll (decodedtext, currentDecodeOperatingContext ())) pskPost (decodedtext);
+    if (stdMsg || pskLogAll (decodedtext, currentDecodeOperatingContext ()))
+      pskPost (decodedtext, currentDecodeOperatingContext (),
+               mskEvidence.messageBits.isEmpty () ? nullptr : &mskEvidence);
     if(ui->actionEnable_QSY_Popups->isChecked() || m_qsymonitorWidget) showQSYMessage(message);
   }
 
@@ -7471,7 +7485,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
             line_read=line_read.left(22) + " CQ " + line_read.trimmed().mid(22);
             auto p = line_read.lastIndexOf (' ');
             DecodedText FST4W_post {QString::fromUtf8 (line_read.left (p).constData ())};
-            pskPost(FST4W_post, decodeContext);
+            pskPost(FST4W_post, decodeContext, evidence ? &*evidence : nullptr);
           } else {
             pskPost(decodedtext, decodeContext, evidence ? &*evidence : nullptr);
           }
@@ -7580,23 +7594,25 @@ void MainWindow::pskPost (DecodedText const& decodedtext,
   Frequency frequency = context.periodFrequency + audioFrequency;
   PSKReporterIPFIX::SpotExtras extras;
   if (evidence) {
-    extras.payload77 = evidence->payload77;
+    extras.message_bits = evidence->messageBits;
     if (evidence->hasStart) {
       // Offset from the start of the period, which for FT4 is half a second
       // after the whole second the spot time carries.
       auto const units = qRound64 (evidence->startSeconds * 10000.0);
       if (units > -0x8000 && units <= 0x7fff) extras.delta_t = static_cast<qint16> (units);
     }
-    // The spot frequency is then the dial plus the whole Hz of the audio
-    // frequency, with the remainder in the fractional field.
-    auto wholeHz = static_cast<qint64> (std::floor (evidence->frequencyHz));
-    auto fraction = qRound64 ((evidence->frequencyHz - wholeHz) * 65536.0);
-    if (fraction > 0xffff) {
-      ++wholeHz;
-      fraction = 0;
+    if (evidence->hasFrequency) {
+      // The spot frequency is then the dial plus the whole Hz of the audio
+      // frequency, with the remainder in the fractional field.
+      auto wholeHz = static_cast<qint64> (std::floor (evidence->frequencyHz));
+      auto fraction = qRound64 ((evidence->frequencyHz - wholeHz) * 65536.0);
+      if (fraction > 0xffff) {
+        ++wholeHz;
+        fraction = 0;
+      }
+      frequency = context.periodFrequency + wholeHz;
+      extras.fractional_frequency = static_cast<quint16> (fraction);
     }
-    frequency = context.periodFrequency + wholeHz;
-    extras.fractional_frequency = static_cast<quint16> (fraction);
   }
   // In log-all timeslots every decoded message is reported, free text and
   // telemetry included; otherwise only those from a known sender carrying a

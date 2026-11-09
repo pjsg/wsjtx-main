@@ -15,7 +15,8 @@ program jt9
   use streaming_emit, only: streaming_emit_set_enabled, streaming_emit_error
   use jt9_params_init, only: init_default_params, init_streaming_extra_fields, &
        apply_per_mode_policy, cli_args_t
-  use decode_completion_module, only: decode_completion_result, write_decode_completion
+  use decode_completion_module, only: decode_completion_result, write_decode_completion, &
+       enable_decode_evidence_records
 
   include 'jt9com.f90'
 
@@ -56,7 +57,7 @@ program jt9
        have_ntol = .false.,multift8 = .false.,hidedupes = .false.,           &
        lft8lowth = .true.,lft8subpass = .true.,lwidedxcsearch = .true.,      &
        stream_mode = .false., use_mtd_fft_plans = .false., wav_utc_has_seconds
-  type (option) :: long_options(45) = [                                      &
+  type (option) :: long_options(46) = [                                      &
     option ('help', .false., 'h', 'Display this help message', ''),          &
     option ('version', .false., 'v', 'Display version and build revision', ''),&
     option ('shmem',.true.,'s','Use native shared memory for sample data','NAME'), &
@@ -122,6 +123,8 @@ program jt9
     option ('ft8', .false., '8', 'FT8 mode', ''),                            &
     option ('jt9', .false., '9', 'JT9 mode', ''),                            &
     option ('quiet', .false., 'q', 'Quiet mode, no <DecodeFinished>', ''),   &
+    option ('evidence', .false., 'V',                                        &
+        'Precede decodes with the <DecodeEvidence> lines WSJT-X reads', ''), &
     option ('msk144', .false., 'k', 'MSK144 mode', ''),                      &
     option ('QSOprog', .true., 'Q', 'QSO progress (0-5), default PROGRESS=1',&
         'QSOprogress'),                                                      &
@@ -151,7 +154,7 @@ program jt9
   TRperiod=60.d0
 
   do
-     call getopt('hvs:e:a:b:r:m:p:d:f:F:w:t:98765430WYqkTMUSZL:S:H:c:G:x:g:X:Q:C:R:N:E:D:1:',   &
+     call getopt('hvs:e:a:b:r:m:p:d:f:F:w:t:98765430WYqVkTMUSZL:S:H:c:G:x:g:X:Q:C:R:N:E:D:1:',   &
           long_options,c,optarg,arglen,stat,offset,remain,.true.)
      if (stat .ne. 0) then
         exit
@@ -219,6 +222,8 @@ program jt9
            lwidedxcsearch = .false.
         case ('q')
            lquiet=.true.
+        case ('V')
+           call enable_decode_evidence_records()
         case ('k')
            mode = 144
         case ('Q')

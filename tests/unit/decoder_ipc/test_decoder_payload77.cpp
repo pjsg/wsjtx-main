@@ -53,7 +53,7 @@ namespace
     0,1,0,1,0,1,1,0,1,1,1,1,1,0,0,0,1,0,1};
 
   // The bits genft8 or genft4 packs for a message, without FT4's scrambling,
-  // in the 10-byte payload77 form.
+  // in the 10-byte messageBits form.
   QByteArray packedPayload77 (QByteArray const& message, int mode)
   {
     char msg[37];
@@ -218,11 +218,11 @@ private slots:
 
         if ("a7" == annotation || "a8" == annotation)
           {
-            QVERIFY2 (pending->payload77.isEmpty (), line.constData ());
+            QVERIFY2 (pending->messageBits.isEmpty (), line.constData ());
           }
         else
           {
-            QVERIFY2 (!pending->payload77.isEmpty (), line.constData ());
+            QVERIFY2 (!pending->messageBits.isEmpty (), line.constData ());
             if (!message.contains ('<') && !message.endsWith ('?'))
               {
                 auto const expected = packedPayload77 (message, mode);
@@ -231,8 +231,8 @@ private slots:
                 // (g15 32373) that some senders, including two in this sample, use.
                 auto const asGrid = message.endsWith (" RR73")
                   ? withGrid15 (expected, 32373) : QByteArray {};
-                QVERIFY2 (pending->payload77 == expected || pending->payload77 == asGrid,
-                          (message + ": " + pending->payload77.toHex () + " != " + expected.toHex ()).constData ());
+                QVERIFY2 (pending->messageBits == expected || pending->messageBits == asGrid,
+                          (message + ": " + pending->messageBits.toHex () + " != " + expected.toHex ()).constData ());
                 ++compared;
               }
           }

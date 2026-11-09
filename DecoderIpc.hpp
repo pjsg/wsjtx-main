@@ -193,13 +193,16 @@ namespace DecoderIpc
   {
     bool hasStart {false};
     double startSeconds {0};    // period start to the first message symbol
+    bool hasFrequency {false};
     double frequencyHz {0};     // audio frequency of tone 0
-    QByteArray payload77;       // empty, or 10 bytes: the 77 received bits,
-                                // first bit most significant, then 3 zero bits
+    QByteArray messageBits;     // empty, or the received message bits, first
+                                // bit most significant, zero-padded to bytes
   };
 
   // Parses "<DecodeEvidence> start=S freq=F bits=B", where S is seconds or
-  // "none", F is Hz, and B is 20 upper-case hex digits or "none".
+  // "none", F is Hz or "none", and B is 2 to 32 upper-case hex digits (whole
+  // bytes) or "none". FT8 and FT4 measure the start and frequency; other
+  // modes give only their bits.
   bool parseDecodeEvidence (QByteArray line, DecodeEvidence * evidence);
 }
 

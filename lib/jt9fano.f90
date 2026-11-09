@@ -5,6 +5,7 @@ subroutine jt9fano(i1SoftSymbols,limit,nlim,msg)
 ! Output:  msg                - decoded message (blank if erasure)
 
   use packjt
+  use decode_completion_module, only: record_decoded_words,clear_decoded_bits
   character*22 msg
   integer*4 i4DecodedBytes(9)
   integer*4 i4Decoded6BitWords(12)
@@ -71,6 +72,7 @@ subroutine jt9fano(i1SoftSymbols,limit,nlim,msg)
   endif
 
   msg='                      '
+  call clear_decoded_bits()
   nbits=72
   call fano232(i1SoftSymbols,nbits+31,mettab,ndelta,limit,i1DecodedBytes,   &
        ncycles,metric,ierr)
@@ -86,6 +88,7 @@ subroutine jt9fano(i1SoftSymbols,limit,nlim,msg)
      call packbits(i1DecodedBits,12,6,i4Decoded6BitWords)
      call unpackmsg(i4Decoded6BitWords,msg)             !Unpack decoded msg
      if(index(msg,'000AAA ').gt.0) msg='                      '
+     if(msg.ne.'                      ') call record_decoded_words(i4Decoded6BitWords,12,6)
   endif
 
   return

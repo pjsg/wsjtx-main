@@ -1,6 +1,7 @@
 subroutine extract4(sym0,ncount,decoded)
 
   use packjt
+  use decode_completion_module, only: record_decoded_words,clear_decoded_bits
   real sym0(207)
   real sym(207)
   character decoded*22
@@ -16,6 +17,7 @@ subroutine extract4(sym0,ncount,decoded)
 
   ncount=-1
   decoded=' '
+  call clear_decoded_bits()
   ave0=sum(sym0)/207.0
   sym=sym0-ave0
   sq=dot_product(sym,sym)
@@ -63,6 +65,7 @@ subroutine extract4(sym0,ncount,decoded)
         decoded='                      '
         ncount=-1
      endif
+     if(ncount.ge.0) call record_decoded_words(data4,12,6)
   endif
 
   return

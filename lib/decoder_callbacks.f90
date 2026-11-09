@@ -10,9 +10,11 @@ module decoder_callbacks
   use q65_decode
   use streaming_emit, only: streaming_emit_enabled, streaming_emit_decode
   use decoder_engine_types
-  use decode_completion_module, only: write_decode_evidence_record
+  use decode_completion_module, only: write_decode_evidence_record, &
+       take_decoded_bits,write_decoded_bits_record
   use jt65_host_support, only: write_jt65_averages
   use, intrinsic :: iso_c_binding, only: c_ptr,c_null_ptr,c_char,c_null_char
+  use, intrinsic :: iso_fortran_env, only: int8
 
   implicit none
 
@@ -107,6 +109,13 @@ contains
     type(decoder_callback_context) :: context
     type(engine_observation) :: observation
     integer :: i,display_utc
+    integer(int8) :: bits(128)
+    integer :: nbits
+
+    ! Bits only for a single-transmission Fano decode: not deep-search or
+    ! averaged results.
+    call take_decoded_bits(bits,nbits)
+    if(is_deep .or. is_average .or. len_trim(decoded0).eq.0) nbits=0
 
     select type (typed_this => this)
     type is (counting_jt4_decoder)
@@ -162,6 +171,7 @@ contains
              call streaming_emit_decode('JT4',context%nutc,snr,dt,freq,decoded,context%utc_is_hhmmss, &
                   sync=sync,flags=cflags)
           else
+             call write_decoded_bits_record(bits,nbits)
              write(*,1000) display_utc,snr,dt,freq,sync,decoded,cflags
           endif
        else
@@ -203,12 +213,23 @@ contains
     integer, intent(in) :: minsync
 
     integer i,nap,n
+    integer(int8) :: bits(128)
+    integer :: nbits
     integer context_nutc, context_ios13
     logical context_bVHF
     logical is_deep,is_average
     character decoded*22,csync*2,cflags*3
     type(decoder_callback_context) :: context
     type(engine_observation) :: observation
+
+    ! Bits only for a single-transmission Reed-Solomon decode: not hinted
+    ! (deep search, ft=2) or averaged (nsum>1) results. An averaged result is
+    ! reported before the same candidate's single decode, so it leaves the slot.
+    nbits=0
+    if(nsum.le.1) then
+       call take_decoded_bits(bits,nbits)
+       if(ft.eq.2 .or. len_trim(decoded0).eq.0) nbits=0
+    endif
 
     select type (typed_this => this)
     type is (counting_jt65_decoder)
@@ -302,6 +323,7 @@ contains
           call streaming_emit_decode("JT65", context_nutc, snr, dt, freq, decoded, &
                sync=csync, flags=cflags)
        else
+          call write_decoded_bits_record(bits,nbits)
           write(*,1010) context_nutc,snr,dt,freq,csync,decoded,cflags
        end if
 1010   format(i4.4,i4,f5.1,i5,1x,a2,1x,a22,1x,a3)
@@ -332,6 +354,11 @@ contains
     type(engine_observation) :: observation
     type(decoder_callback_context) :: context
     integer context_nutc, context_ios13,i
+    integer(int8) :: bits(128)
+    integer :: nbits
+
+    call take_decoded_bits(bits,nbits)         !A Fano decode's 72 bits
+    if(len_trim(decoded).eq.0) nbits=0
 
     select type (typed_this => this)
     type is (counting_jt9_decoder)
@@ -364,6 +391,7 @@ contains
     if (streaming_emit_enabled()) then
        call streaming_emit_decode("JT9", context_nutc, snr, dt, nint(freq), decoded)
     else
+       call write_decoded_bits_record(bits,nbits)
        write(*,1000) context_nutc,snr,dt,nint(freq),decoded
     end if
 1000 format(i4.4,i4,f5.1,i5,1x,'@ ',1x,a22)
@@ -825,6 +853,10 @@ contains
     character*37 suffix
     character*70 line
     integer context_ios13
+    integer(int8) :: bits(128)
+    integer :: nbits
+
+    call take_decoded_bits(bits,nbits)         !FST4's 77 or FST4W's 50 bits
 
     select type (typed_this => this)
     type is (counting_fst4_decoder)
@@ -879,6 +911,7 @@ contains
             nutc, nsnr, dt, nint(freq), decoded0,context%utc_is_hhmmss, &
             ap=nap, period=ntrperiod)
     else
+       call write_decoded_bits_record(bits,nbits)
        write(*,1005) line
     end if
 1005 format(a70)
@@ -927,6 +960,13 @@ contains
     integer context_ios13,display_utc,i
     type(engine_observation) :: observation
     type(decoder_callback_context) :: context
+    integer(int8) :: bits(128)
+    integer :: nbits
+
+    ! Bits only for a single-transmission decode: not list decodes (q3),
+    ! which match candidate messages, or averaged ones.
+    call take_decoded_bits(bits,nbits)
+    if(idec.eq.3 .or. nused.ge.2) nbits=0
 
     select type (typed_this => this)
     type is (counting_q65_decoder)
@@ -968,6 +1008,7 @@ contains
        if(iflagdec.eq.1) cflags=trim(cflags)//'#'
     endif
 
+    if(.not.streaming_emit_enabled()) call write_decoded_bits_record(bits,nbits)
     if(ntrperiod.lt.60) then
        if (streaming_emit_enabled()) then
           call streaming_emit_decode("Q65", nutc, nsnr, dt, nint(freq), decoded,context%utc_is_hhmmss, &

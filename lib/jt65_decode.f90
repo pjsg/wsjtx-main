@@ -3,6 +3,7 @@ module jt65_decode
   use jt65_mod, only: jt65_workspace,jt65_average_entry,jt65_work, &
        clear_jt65_averages,destroy_jt65_plans,jt65_ap_epoch
   use, intrinsic :: iso_c_binding, only: c_int16_t,c_int64_t
+  use decode_completion_module, only: clear_decoded_bits
 
   integer, parameter :: NSZ=3413, NZMAX=60*12000
 
@@ -358,6 +359,7 @@ contains
           call timer('decod65a',0)
           nft=0
           nspecial=0
+          call clear_decoded_bits()
           call decode65a(dd,npts,first_time,nqd,freq,nflip,mode65,nvec,     &
                naggressive,ndepth,ntol,mycall,hiscall,hisgrid,nQSOProgress, &
                ljt65apon,bVHF,sync2,a,dtx,nft,nspecial,qual,                &
@@ -374,6 +376,7 @@ contains
           endif
           
           if(nspecial.eq.0 .and. sync1.eq.5.0 .and. dtx.eq.2.5) cycle
+          if(nspecial.gt.0) call clear_decoded_bits()  !Shorthand: no message bits
           if(nspecial.eq.2) decoded='RO'
           if(nspecial.eq.3) decoded='RRR'
           if(nspecial.eq.4) decoded='73'

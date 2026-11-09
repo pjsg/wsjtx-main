@@ -90,7 +90,8 @@ end module msk144_stream
 
 subroutine decode_msk144_core(audio_samples, params, data_dir, completion)
   use decode_completion_module, only: decode_completion_result,           &
-       reset_decode_completion, set_decode_completion
+       reset_decode_completion, set_decode_completion,                    &
+       take_decoded_bits, write_decoded_bits_record
   include 'jt9com.f90'
 
   ! constants
@@ -120,6 +121,8 @@ subroutine decode_msk144_core(audio_samples, params, data_dir, completion)
   integer :: sample_count
   integer :: position
   integer :: message_count
+  integer(1) :: bits(128)
+  integer :: nbits
 
   call reset_decode_completion(completion)
   message_count = 0
@@ -139,6 +142,8 @@ subroutine decode_msk144_core(audio_samples, params, data_dir, completion)
 
     if (line(1:1) .ne. char(0)) then
       line = line(1:index(line, char(0))-1)
+      call take_decoded_bits(bits, nbits)       ! the 77 bits, unless a short message
+      call write_decoded_bits_record(bits, nbits)
       write(*, 1001) line
       1001 format(a80)
       message_count = message_count + 1;

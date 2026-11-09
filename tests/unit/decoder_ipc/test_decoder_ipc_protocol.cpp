@@ -47,6 +47,7 @@ private Q_SLOTS:
   void completionMarkerRejections ();
   void evidenceMarkerParsing ();
   void evidenceMarkerWithoutStartOrBits ();
+  void evidenceMarkerWithOnlyBits ();
   void evidenceMarkerRejections_data ();
   void evidenceMarkerRejections ();
 };
@@ -539,17 +540,28 @@ void TestDecoderIpcProtocol::evidenceMarkerParsing ()
   QVERIFY (evidence.hasStart);
   QCOMPARE (evidence.startSeconds, -0.12345);
   QCOMPARE (evidence.frequencyHz, 1234.5625);
-  QCOMPARE (evidence.payload77, QByteArray::fromHex ("0123456789ABCDEF0120"));
+  QCOMPARE (evidence.messageBits, QByteArray::fromHex ("0123456789ABCDEF0120"));
 }
 
 void TestDecoderIpcProtocol::evidenceMarkerWithoutStartOrBits ()
 {
   DecoderIpc::DecodeEvidence evidence;
-  evidence.payload77 = "stale";
+  evidence.messageBits = "stale";
   QVERIFY (DecoderIpc::parseDecodeEvidence ("<DecodeEvidence> start=none freq=600.00000 bits=none", &evidence));
   QVERIFY (!evidence.hasStart);
+  QVERIFY (evidence.hasFrequency);
   QCOMPARE (evidence.frequencyHz, 600.0);
-  QVERIFY (evidence.payload77.isEmpty ());
+  QVERIFY (evidence.messageBits.isEmpty ());
+}
+
+void TestDecoderIpcProtocol::evidenceMarkerWithOnlyBits ()
+{
+  // JT4, JT9 and JT65 report 72 bits in 9 bytes, without measurements.
+  DecoderIpc::DecodeEvidence evidence;
+  QVERIFY (DecoderIpc::parseDecodeEvidence ("<DecodeEvidence> start=none freq=none bits=824C345AB631617EA8", &evidence));
+  QVERIFY (!evidence.hasStart);
+  QVERIFY (!evidence.hasFrequency);
+  QCOMPARE (evidence.messageBits, QByteArray::fromHex ("824C345AB631617EA8"));
 }
 
 void TestDecoderIpcProtocol::evidenceMarkerRejections_data ()
@@ -561,20 +573,20 @@ void TestDecoderIpcProtocol::evidenceMarkerRejections_data ()
   QTest::newRow ("extra field") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=none x"};
   QTest::newRow ("reordered") << QByteArray {"<DecodeEvidence> freq=1000.0 start=.5 bits=none"};
   QTest::newRow ("bad start") << QByteArray {"<DecodeEvidence> start=x freq=1000.0 bits=none"};
-  QTest::newRow ("bad freq") << QByteArray {"<DecodeEvidence> start=.5 freq=none bits=none"};
+  QTest::newRow ("bad freq") << QByteArray {"<DecodeEvidence> start=.5 freq=x bits=none"};
   QTest::newRow ("negative freq") << QByteArray {"<DecodeEvidence> start=.5 freq=-1.0 bits=none"};
-  QTest::newRow ("short bits") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789ABCDEF012"};
+  QTest::newRow ("half byte") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789ABCDEF012"};
+  QTest::newRow ("too long") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=00112233445566778899AABBCCDDEEFF00"};
   QTest::newRow ("lower case bits") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789abcdef0120"};
-  QTest::newRow ("padding bits set") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789ABCDEF0121"};
 }
 
 void TestDecoderIpcProtocol::evidenceMarkerRejections ()
 {
   QFETCH (QByteArray, line);
   DecoderIpc::DecodeEvidence evidence;
-  evidence.payload77 = "unchanged";
+  evidence.messageBits = "unchanged";
   QVERIFY (!DecoderIpc::parseDecodeEvidence (line, &evidence));
-  QCOMPARE (evidence.payload77, QByteArray {"unchanged"});
+  QCOMPARE (evidence.messageBits, QByteArray {"unchanged"});
 }
 
 QTEST_GUILESS_MAIN (TestDecoderIpcProtocol)

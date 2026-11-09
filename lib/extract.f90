@@ -18,6 +18,7 @@ subroutine extract(s3,nadd,mode65,ntrials,naggressive,ndepth,nflip,     &
   use packjt
   use jt65_mod
   use timer_module, only: timer
+  use decode_completion_module, only: record_decoded_words,clear_decoded_bits
 
   real s3(64,63)
   character decoded*22, apmessage*22
@@ -113,6 +114,7 @@ subroutine extract(s3,nadd,mode65,ntrials,naggressive,ndepth,nflip,     &
   nft=0
   nfail=0
   decoded='                      '
+  call clear_decoded_bits()
   call pctile(s3,4032,npct,base)
   ncount=-1
   nhist=0
@@ -220,11 +222,17 @@ subroutine extract(s3,nadd,mode65,ntrials,naggressive,ndepth,nflip,     &
      call interleave63(correct,1)
      call graycode65(correct,63,1)
      call unpackmsg(dat4,decoded)     !Unpack the user message
+! Reed-Solomon decodes, with or without AP symbols, are of received bits;
+! hinted (deep search) decodes, nft=2, are not and leave the slot clear.
+     call record_decoded_words(dat4,12,6)
      ncount=0
      if(iand(dat4(10),8).ne.0) ltext=.true.
   endif
 900 continue
-  if(nft.eq.1 .and. nhard.lt.0) decoded='                      '
+  if(nft.eq.1 .and. nhard.lt.0) then
+     decoded='                      '
+     call clear_decoded_bits()
+  endif
 
   return
 end subroutine extract

@@ -3,6 +3,7 @@ subroutine decode65b(s2,nflip,nadd,mode65,ntrials,naggressive,ndepth,      &
      nhist,decoded)
 
   use jt65_mod
+  use decode_completion_module, only: clear_decoded_bits
   real s2(66,126)
   real s3(64,63)
   logical ltext,ljt65apon
@@ -30,6 +31,7 @@ subroutine decode65b(s2,nflip,nadd,mode65,ntrials,naggressive,ndepth,      &
   if(ncount.lt.0) then 
      nft=0
      decoded='                      '
+     call clear_decoded_bits()
   endif
 
   return

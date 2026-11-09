@@ -6,6 +6,7 @@ subroutine mskrtd(id2,nutc0,tsec,ntol,nrxfreq,ndepth,mycall,hiscall,      &
 ! Called from hspec() at half-block increments, about 0.3 s
 
   use packjt77
+  use decode_completion_module, only: clear_decoded_bits
 
   parameter (NZ=7168)                !Block size
   parameter (NSPM=864)               !Number of samples per message frame
@@ -98,6 +99,7 @@ subroutine mskrtd(id2,nutc0,tsec,ntol,nrxfreq,ndepth,mycall,hiscall,      &
   msgreceived='                                     '
   max_iterations=10
   niterations=0
+  call clear_decoded_bits()
   d(1:NZ)=id2
   rms=sqrt(sum(d(1:NZ)*d(1:NZ))/NZ)
   if(rms.lt.1.0) go to 999
@@ -131,6 +133,7 @@ subroutine mskrtd(id2,nutc0,tsec,ntol,nrxfreq,ndepth,mycall,hiscall,      &
      call msk40spd(cdat,np,ntol,mycall,hiscall,bswl,nhasharray,      &
               ndecodesuccess,msgreceived,fc,fest,tdec,navg)
      if(ndecodesuccess .ge.1) bshdecode=.true.
+     call clear_decoded_bits()             !Short (MSK40) messages: no 77 bits
   endif
   if( ndecodesuccess .ge. 1 ) then
     tdec=tsec+tdec

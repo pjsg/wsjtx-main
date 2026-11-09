@@ -20,7 +20,7 @@ namespace
   constexpr int ANTENNA_LIMIT = 128;
   constexpr int RIG_INFORMATION_LIMIT = 128;
 
-  constexpr int PAYLOAD77_BYTES = 10;
+  constexpr int MAX_MESSAGE_BITS_BYTES = 16;
 
   // PSK Reporter uses enterprise-specific IPFIX elements under PEN 30351.
   // Template 0x50e5 describes sender/spot records; template 0x50e2 describes
@@ -203,9 +203,10 @@ namespace
 #endif
                                );
     auto const& extras = spot.extras;
-    auto const payload77 = extras.payload77.size () == PAYLOAD77_BYTES ? extras.payload77 : QByteArray {};
-    out << quint8 (payload77.size ());
-    out.writeRawData (payload77.constData (), payload77.size ());
+    auto const message_bits = extras.message_bits.size () <= MAX_MESSAGE_BITS_BYTES
+      ? extras.message_bits : QByteArray {};
+    out << quint8 (message_bits.size ());
+    out.writeRawData (message_bits.constData (), message_bits.size ());
     out << extras.delta_t << extras.fractional_frequency;
     return data;
   }

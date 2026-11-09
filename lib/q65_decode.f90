@@ -6,6 +6,7 @@ module q65_decode
   use q65_codec
   use packjt77, only: pack77_state,initialize_pack77_state,reset_pack77_state
   use types, only: q3list
+  use decode_completion_module, only: record_decoded_bits
   use q65_callers, only: Q65_MAX_CALLERS,q65_record_caller,q65_expire_callers
   use, intrinsic :: iso_c_binding
 
@@ -270,6 +271,18 @@ contains
     call q65_select(legacy_work)
     this%engine_active=.false.
   end subroutine
+
+  ! The 77 message bits a decode was made from, for its report to take.
+  subroutine record_c77(c77)
+    character(len=77), intent(in) :: c77
+    integer(1) :: bits(77)
+    integer :: i
+
+    do i=1,77
+       bits(i)=merge(1_1,0_1,c77(i:i).eq.'1')
+    enddo
+    call record_decoded_bits(bits)
+  end subroutine record_c77
 
   subroutine emit_diagnostic(this,line)
     use prog_args, only: data_dir
@@ -595,6 +608,7 @@ contains
           xdtdecodes(ndecodes)=dtdec
           call q65_snr(dat4,dtdec,f0dec,mode_q65,snr2)
           nsnr=nint(snr2)
+          call record_c77(c77)
           call this%callback(nutc,snr1,nsnr,dtdec,f0dec,decoded,    &
                idec,nused,ntrperiod,iflagdec)
           if(ncontest.eq.1) then
@@ -707,6 +721,7 @@ contains
              f0decodes(ndecodes)=f0dec
              call q65_snr(dat4,dtdec,f0dec,mode_q65,snr2)
              nsnr=nint(snr2)
+             call record_c77(c77)
              call this%callback(nutc,snr1,nsnr,dtdec,f0dec,decoded,    &
                   idec,nused,ntrperiod,iflagdec)
              if(ncontest.eq.1) then

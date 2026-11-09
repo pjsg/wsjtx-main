@@ -20,6 +20,39 @@ wsjt_link_common_fortran (test_waveform_fit)
 add_test (NAME test_waveform_fit COMMAND test_waveform_fit)
 set_tests_properties (test_waveform_fit PROPERTIES TIMEOUT 120)
 
+add_executable (check_decode_bits check_decode_bits.f90)
+set_target_properties (check_decode_bits PROPERTIES LINKER_LANGUAGE CXX)
+wsjt_link_common_fortran (check_decode_bits)
+
+# Each mode's sample through jt9 --evidence: the bits reported with each
+# decode must unpack to its message. Arguments are |-separated.
+function (add_decode_bits_test name bits args samples)
+  add_test (NAME test_decode_bits_${name}
+    COMMAND ${CMAKE_COMMAND}
+      -DJT9=$<TARGET_FILE:jt9>
+      -DCHECKER=$<TARGET_FILE:check_decode_bits>
+      -DBITS=${bits}
+      "-DARGS=${args}"
+      "-DSAMPLES=${samples}"
+      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/decode-bits-${name}
+      -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/run_decode_bits.cmake)
+  set_tests_properties (test_decode_bits_${name} PROPERTIES
+    LABELS "decoder;integration" TIMEOUT 300)
+endfunction ()
+set (samples ${CMAKE_SOURCE_DIR}/samples)
+add_decode_bits_test (ft8 77 "-8|-d|3" "${samples}/FT8/210703_133430.wav")
+add_decode_bits_test (ft4 77 "--ft4|-d|3" "${samples}/FT4/000000_000002.wav")
+add_decode_bits_test (jt9 72 "-9|-d|3" "${samples}/JT9/130418_1742.wav")
+add_decode_bits_test (jt65 72 "--jt65|-b|B|-f|1700|-d|51"
+  "${samples}/JT65/JT65B/000000_0001.wav|${samples}/JT65/JT65B/000000_0004.wav|${samples}/JT65/JT65B/000000_0006.wav")
+add_decode_bits_test (jt4 72 "--jt4|-b|F|-f|1200|-d|3" "${samples}/JT4/JT4F/OK1KIR_141105_175700.WAV")
+add_decode_bits_test (q65 77 "--q65|-b|A|-p|60|-f|1000|-d|3" "${samples}/Q65/60A_EME_6m/210106_1621.wav")
+add_decode_bits_test (fst4 77 "--fst4|-p|60|-f|1331|-L|1000|-H|1400|-d|3" "${samples}/FST4+FST4W/210115_0058.wav")
+add_decode_bits_test (fst4w 50 "--fst4w|-p|1800|-f|1433|-F|100|-d|3" "${samples}/FST4+FST4W/201230_0300.wav")
+add_decode_bits_test (msk144 77 "-k|-p|15"
+  "${samples}/MSK144/181211_120500.wav|${samples}/MSK144/181211_120800.wav")
+
 add_executable (test_decoder_engine_ft4 test_decoder_engine_ft4.c)
 set_target_properties (test_decoder_engine_ft4 PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories (test_decoder_engine_ft4 PRIVATE ${CMAKE_SOURCE_DIR})

@@ -1,6 +1,7 @@
 subroutine msk144decodeframe(c,softbits,msgreceived,nsuccess)
 !  use timer_module, only: timer
   use packjt77
+  use decode_completion_module, only: record_decoded_bits
   parameter (NSPM=864)
   character*37 msgreceived
   character*77 c77
@@ -105,6 +106,7 @@ subroutine msk144decodeframe(c,softbits,msgreceived,nsuccess)
     else 
         call unpack77(c77,1,msgreceived,unpk77_success)
         if(.not.unpk77_success) nsuccess=0
+        if(nsuccess.eq.1) call record_decoded_bits(decoded77)
     endif
   endif
 

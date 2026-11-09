@@ -1,5 +1,5 @@
 module decode_completion_module
-  use iso_fortran_env, only: int64
+  use iso_fortran_env, only: int8, int64
   use decoder_ipc_atomic, only: decoder_ipc_progress_report
   implicit none
 
@@ -11,11 +11,22 @@ module decode_completion_module
   public :: write_decode_progress
   public :: enable_decode_evidence_records
   public :: write_decode_evidence_record
+  public :: record_decoded_bits,record_decoded_words,clear_decoded_bits
+  public :: take_decoded_bits,write_decoded_bits_record,take_decoded_bytes_c
 
   ! Under the GUI, jt9 precedes an FT8 or FT4 decode line with what the
   ! decoder measured: message start, precise frequency, and message bits.
   ! Standalone jt9 output is left unchanged.
   logical, save :: evidence_records_enabled = .false.
+
+  ! Message bits a decoder received, held from just before it reports the
+  ! decode until the report takes them. Decoders record only bits received as
+  ! such (not deep-search, list or averaged results) and clear the slot
+  ! otherwise. One slot per thread: a decoder and its reports share a thread.
+  integer, parameter :: MAX_DECODED_BITS = 128
+  integer(int8), save :: decoded_bits(MAX_DECODED_BITS) = 0_int8
+  integer, save :: decoded_bit_count = 0
+!$omp threadprivate(decoded_bits, decoded_bit_count)
 
   type :: decode_completion_result
      logical :: available = .false.
@@ -93,6 +104,105 @@ contains
     progress_thread_rate = rate
     call decoder_ipc_progress_report(generation)
   end subroutine write_decode_progress
+
+  ! Bits as 0/1 values, first bit first.
+  subroutine record_decoded_bits(bits)
+    integer(int8), intent(in) :: bits(:)
+
+    decoded_bit_count = min(size(bits), MAX_DECODED_BITS)
+    decoded_bits(1:decoded_bit_count) = bits(1:decoded_bit_count)
+  end subroutine record_decoded_bits
+
+  ! nwords words of width bits each, most significant bit first: the 72-bit
+  ! JT4, JT9 and JT65 messages are twelve 6-bit words.
+  subroutine record_decoded_words(words, nwords, width)
+    integer, intent(in) :: nwords, width
+    integer, intent(in) :: words(nwords)
+    integer :: i, j
+
+    decoded_bit_count = min(nwords * width, MAX_DECODED_BITS)
+    do i = 1, nwords
+       do j = 1, width
+          if ((i - 1) * width + j > decoded_bit_count) exit
+          decoded_bits((i - 1) * width + j) = &
+               int(ibits(words(i), width - j, 1), int8)
+       end do
+    end do
+  end subroutine record_decoded_words
+
+  subroutine clear_decoded_bits()
+    decoded_bit_count = 0
+  end subroutine clear_decoded_bits
+
+  ! Returns the recorded bits, if any, and clears the slot.
+  subroutine take_decoded_bits(bits, nbits)
+    integer(int8), intent(out) :: bits(MAX_DECODED_BITS)
+    integer, intent(out) :: nbits
+
+    nbits = decoded_bit_count
+    bits = 0_int8
+    bits(1:nbits) = decoded_bits(1:nbits)
+    decoded_bit_count = 0
+  end subroutine take_decoded_bits
+
+  ! Writes '<DecodeEvidence> start=none freq=none bits=B' ahead of a decode
+  ! line, B being the bits as hex, first bit most significant, padded with
+  ! zero bits to whole bytes. Nothing is written for no bits.
+  subroutine write_decoded_bits_record(bits, nbits)
+    integer(int8), intent(in) :: bits(:)
+    integer, intent(in) :: nbits
+
+    if (.not. evidence_records_enabled .or. nbits <= 0) return
+    write(*,'(2a)') '<DecodeEvidence> start=none freq=none bits=', hex_bits(bits, nbits)
+  end subroutine write_decoded_bits_record
+
+  function hex_bits(bits, nbits) result(hex)
+    integer(int8), intent(in) :: bits(:)
+    integer, intent(in) :: nbits
+    character(len=:), allocatable :: hex
+    character(len=16), parameter :: digits = '0123456789ABCDEF'
+    integer :: i, j, k, nibble, ndigits
+
+    ndigits = 2 * ((nbits + 7) / 8)
+    allocate(character(len=ndigits) :: hex)
+    do i = 1, ndigits
+       nibble = 0
+       do j = 1, 4
+          k = 4 * (i - 1) + j
+          nibble = 2 * nibble
+          if (k <= nbits) then
+             if (bits(k) /= 0) nibble = nibble + 1
+          end if
+       end do
+       hex(i:i) = digits(nibble + 1:nibble + 1)
+    end do
+  end function hex_bits
+
+  ! For in-process decoders (MSK144): the recorded bits packed most
+  ! significant bit first into whole bytes, at most 16; clears the slot.
+  subroutine take_decoded_bytes_c(bytes, nbytes) bind(C, name='take_decoded_bytes_c')
+    use iso_c_binding, only: c_signed_char, c_int
+    integer(c_signed_char), intent(out) :: bytes(16)
+    integer(c_int), intent(out) :: nbytes
+    integer(int8) :: bits(MAX_DECODED_BITS)
+    integer :: nbits, i, j, v
+
+    call take_decoded_bits(bits, nbits)
+    nbits = min(nbits, 128)
+    nbytes = (nbits + 7) / 8
+    bytes = 0
+    do i = 1, nbytes
+       v = 0
+       do j = 1, 8
+          v = 2 * v
+          if (8 * (i - 1) + j <= nbits) then
+             if (bits(8 * (i - 1) + j) /= 0) v = v + 1
+          end if
+       end do
+       if (v > 127) v = v - 256
+       bytes(i) = int(v, c_signed_char)
+    end do
+  end subroutine take_decoded_bytes_c
 
   subroutine enable_decode_evidence_records()
     evidence_records_enabled = .true.
