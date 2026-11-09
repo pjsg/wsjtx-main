@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QString>
 #include "Radio.hpp"
+#include "PSKReporterIPFIX.hpp"
 #include "pimpl_h.hpp"
 
 class QString;
@@ -34,10 +35,9 @@ public:
   void setLocalStation (QString const& call, QString const& grid, QString const& antenna, QString const& rigInformation);
 
   // Returns false if accepting the spot required dropping an older pending spot.
-  // payload77 is empty, or the 10-byte form of the 77 message bits the spot
-  // was decoded from (see PSKReporterIPFIX::Spot).
+  // extras carries what the decoder measured beyond the decoded text.
   bool addRemoteStation (QString const& call, QString const& grid, Radio::Frequency freq, QString const& mode, int snr, QDateTime spotTime
-                         , QByteArray const& payload77 = {});
+                         , PSKReporterIPFIX::SpotExtras const& extras = {});
 
   //
   // Flush any pending spots to PSK Reporter

@@ -93,6 +93,7 @@ typedef struct {
   int8_t expected_payload[77];
   int8_t expected_tones[79];
   float expected_start_seconds;
+  float expected_carrier_hz;
   decoder_observation retained;
   decoder_observation expected_record;
 } callback_context;
@@ -114,7 +115,11 @@ static void observe(const decoder_observation *record, void *opaque)
     CHECK(memcmp(record->ft8.tones, context->expected_tones, 79) == 0);
     CHECK(record->ft8.has_tones != 0);
     CHECK(record->ft8.has_waveform_start != 0);
-    CHECK(fabsf(record->ft8.waveform_start_seconds - context->expected_start_seconds) < 0.035f);
+    /* Fitting the reference waveform to the audio refines the decoder's
+       5 ms / 0.5 Hz grid well below a millisecond on a clean signal. */
+    CHECK(fabsf(record->ft8.waveform_start_seconds - context->expected_start_seconds) < 0.001f);
+    CHECK(record->ft8.has_waveform_frequency != 0);
+    CHECK(fabsf(record->ft8.waveform_frequency_hz - context->expected_carrier_hz) < 0.01f);
     CHECK(fabsf(record->dt_seconds - (context->expected_start_seconds - 0.5f)) < 0.035f);
     CHECK(record->ft4.payload_origin == DECODER_PAYLOAD_NONE);
     CHECK(record->ft4.has_tones == 0 && record->ft4.has_waveform_start == 0);
@@ -326,6 +331,7 @@ static void check_mtd_qso_boundary(callback_context *context, int16_t *samples,
   memcpy(text, expected, strlen(expected));
   context->expected_message = expected;
   context->expected_start_seconds = 0.5f;
+  context->expected_carrier_hz = 1600.0f;
   decoder_engine_test_ft8_message(text, 1600.0f, samples, context->expected_payload,
                                   context->expected_tones, 6000);
   memcpy(original, samples, 180000 * sizeof *samples);
@@ -474,6 +480,7 @@ int main(int argc, char **argv)
   CHECK(decoder_engine_release_input(engine, request.input_id) == DECODER_OK);
 
   context.expected_start_seconds = 0.5f;
+  context.expected_carrier_hz = 1500.0f;
   decoder_engine_test_signal(samples, context.expected_payload, context.expected_tones, 6000);
   memcpy(before, samples, 180000 * sizeof *samples);
   request = request_for(102, 202);
@@ -502,6 +509,7 @@ int main(int argc, char **argv)
   check_mtd_lifecycle(&context, &request, before, &options);
   /* Classic crops EME input; MTD analyzes the original sample coordinates. */
   context.expected_start_seconds = 2.15f;
+  context.expected_carrier_hz = 1500.0f;
   decoder_engine_test_signal(samples, context.expected_payload, context.expected_tones, 25800);
   memcpy(before, samples, 180000 * sizeof *samples);
   check_repeat_stages_and_eme(&context, before);

@@ -10,7 +10,7 @@ subroutine jt9a()
        DECODER_IPC_CLAIMED, DECODER_IPC_CLAIM_SHUTDOWN
   use decode_completion_module, only: decode_completion_result,          &
        reset_decode_completion, set_decode_completion, write_decode_completion, &
-       enable_decode_payload_records
+       enable_decode_evidence_records
   use prog_args
   use timer_module, only: timer
   use timer_impl, only: init_timer !, limtrace
@@ -63,7 +63,7 @@ subroutine jt9a()
        shared_memory%control%progress)
 
   call reset_decode_completion(completion)
-  call enable_decode_payload_records()
+  call enable_decode_evidence_records()
   write(*,'(a,i0)') '<DecoderReady> version=',DECODER_IPC_VERSION
   call flush(6)
 

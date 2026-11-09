@@ -8,6 +8,7 @@
 #include "lib/DecoderWorkerLock.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <limits>
 
@@ -516,25 +517,51 @@ bool DecoderIpc::parseStart (QByteArray line, qint32 * generation)
   return true;
 }
 
-bool DecoderIpc::parsePayload77 (QByteArray line, QByteArray * payload77)
+bool DecoderIpc::parseDecodeEvidence (QByteArray line, DecodeEvidence * evidence)
 {
-  if (!payload77) return false;
+  if (!evidence) return false;
   if (line.endsWith ('\n')) line.chop (1);
   if (line.endsWith ('\r')) line.chop (1);
 
-  QByteArray const prefix {"<DecodePayload77> "};
-  constexpr int hexDigits {20};
-  if (!line.startsWith (prefix) || line.size () != prefix.size () + hexDigits) return false;
-  auto const hex = line.mid (prefix.size ());
-  for (auto const character : hex)
+  QByteArray const prefix {"<DecodeEvidence> "};
+  if (!line.startsWith (prefix)) return false;
+  auto const fields = line.mid (prefix.size ()).split (' ');
+  if (fields.size () != 3
+      || !fields[0].startsWith ("start=")
+      || !fields[1].startsWith ("freq=")
+      || !fields[2].startsWith ("bits="))
+    return false;
+
+  DecodeEvidence parsed;
+  auto const start = fields[0].mid (6);
+  if ("none" != start)
     {
-      if (!((character >= '0' && character <= '9') || (character >= 'A' && character <= 'F')))
-        return false;
+      bool ok {false};
+      parsed.startSeconds = start.toDouble (&ok);
+      if (!ok || !std::isfinite (parsed.startSeconds)) return false;
+      parsed.hasStart = true;
     }
-  auto const bytes = QByteArray::fromHex (hex);
-  // The three bits after the 77 message bits are always zero.
-  if (bytes.size () != hexDigits / 2 || (static_cast<quint8> (bytes.back ()) & 0x07)) return false;
-  *payload77 = bytes;
+
+  bool ok {false};
+  parsed.frequencyHz = fields[1].mid (5).toDouble (&ok);
+  if (!ok || !std::isfinite (parsed.frequencyHz) || parsed.frequencyHz < 0) return false;
+
+  auto const bits = fields[2].mid (5);
+  if ("none" != bits)
+    {
+      constexpr int hexDigits {20};
+      if (bits.size () != hexDigits) return false;
+      for (auto const character : bits)
+        {
+          if (!((character >= '0' && character <= '9') || (character >= 'A' && character <= 'F')))
+            return false;
+        }
+      parsed.payload77 = QByteArray::fromHex (bits);
+      // The three bits after the 77 message bits are always zero.
+      if (static_cast<quint8> (parsed.payload77.back ()) & 0x07) return false;
+    }
+
+  *evidence = parsed;
   return true;
 }
 

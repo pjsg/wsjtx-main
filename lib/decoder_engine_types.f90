@@ -10,7 +10,7 @@ module decoder_engine_types
   public :: engine_abi,engine_mode_ft8,engine_mode_ft4,engine_mode_jt9,engine_mode_jt65,engine_mode_q65
   public :: engine_support_ft8,engine_support_ft4,engine_support_jt9,engine_support_jt65,engine_support_q65
 
-  integer(c_int), parameter :: engine_abi=8,engine_mode_ft8=8,engine_mode_ft4=5,engine_mode_jt9=9,engine_mode_jt65=65
+  integer(c_int), parameter :: engine_abi=9,engine_mode_ft8=8,engine_mode_ft4=5,engine_mode_jt9=9,engine_mode_jt65=65
   integer(c_int), parameter :: engine_support_ft8=1,engine_support_ft4=2,engine_support_jt9=4,engine_support_jt65=8
 
   integer(c_int), parameter :: engine_mode_q65=66,engine_support_q65=16
@@ -39,12 +39,16 @@ module decoder_engine_types
      integer(c_int8_t) :: payload77(77)=0,tones(79)=0
      integer(c_int) :: payload_origin=engine_payload_none,has_tones=0,has_waveform_start=0,method=0
      real(c_float) :: waveform_start_seconds=0.0
+     integer(c_int) :: has_waveform_frequency=0
+     real(c_float) :: waveform_frequency_hz=0.0
   end type
 
   type, bind(C) :: ft4_signal_evidence
      integer(c_int8_t) :: payload77(77)=0,tones(103)=0
      integer(c_int) :: payload_origin=engine_payload_none,has_tones=0,has_waveform_start=0,method=0
      real(c_float) :: waveform_start_seconds=0.0
+     integer(c_int) :: has_waveform_frequency=0
+     real(c_float) :: waveform_frequency_hz=0.0
   end type
 
   type, bind(C) :: superfox_evidence

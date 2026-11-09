@@ -2,6 +2,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <optional>
+
 #include <QMainWindow>
 #include <QByteArray>
 #include <QString>
@@ -66,6 +68,7 @@ namespace DecoderIpc {class Session;}
 #include "Transceiver/Transceiver.hpp"
 #include "DisplayManual.hpp"
 #include "Network/PSKReporter.hpp"
+#include "DecoderIpc.hpp"
 #include "Network/Cloudlog.hpp"
 #include "logbook/logbook.h"
 #include "astro.h"
@@ -1148,8 +1151,8 @@ private:
   bool    m_generated_message_error;
   bool    m_startAnother;
   ActiveJt9Decode m_activeJt9Decode;
-  // 77 message bits jt9 reported for the decode line that follows
-  QByteArray m_pendingPayload77;
+  // What jt9 measured for the decode line that follows
+  std::optional<DecoderIpc::DecodeEvidence> m_pendingEvidence;
   Ft8MtdDecodeCoordinator m_ft8MtdDecodeCoordinator;
 #if defined (WSJT_ENABLE_LIVE_AUDIO_TEST)
   qint64 m_liveAudioTestPendingFt8FinalPeriod {-1};
@@ -1580,7 +1583,7 @@ private:
   void pskPost(DecodedText const& decodedtext);
   void pskPost(DecodedText const& decodedtext,
                DecodeOperatingContext const& context,
-               QByteArray const& payload77 = {});
+               DecoderIpc::DecodeEvidence const* evidence = nullptr);
   void displayDialFrequency ();
   void transmitDisplay (bool);
   void handleDecodeSelection(QString const& line, Qt::KeyboardModifiers modifiers,

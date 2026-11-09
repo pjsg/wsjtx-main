@@ -23,12 +23,13 @@ namespace
   constexpr int PAYLOAD77_BYTES = 10;
 
   // PSK Reporter uses enterprise-specific IPFIX elements under PEN 30351.
-  // Template 0x50e4 describes sender/spot records; template 0x50e2 describes
+  // Template 0x50e5 describes sender/spot records; template 0x50e2 describes
   // receiver metadata, with receiverCallsign as the options-template scope.
-  // 0x50e4 is the earlier 0x50e3 layout plus messageBits (30351.14). A new ID
-  // keeps collectors that cached 0x50e3 from misreading the longer records.
+  // 0x50e5 is the earlier 0x50e3 layout plus messageBits (30351.14), deltaT
+  // (30351.15) and fractionalFrequency (30351.16). A new ID keeps collectors
+  // that cached an earlier layout from misreading the longer records.
   constexpr quint32 PSK_REPORTER_PEN = 30351;
-  constexpr quint16 SENDER_TEMPLATE_ID = 0x50e4;
+  constexpr quint16 SENDER_TEMPLATE_ID = 0x50e5;
   constexpr quint16 RECEIVER_TEMPLATE_ID = 0x50e2;
 
   int num_pad_bytes (int len)
@@ -79,14 +80,15 @@ namespace
     QByteArray sets;
     {
       // Sender Information template: callsign, frequency, SNR, mode, locator,
-      // information source, spot timestamp, and the 77 message bits.
+      // information source, spot timestamp, the 77 message bits, the message
+      // start offset, and the fractional part of the frequency.
       QByteArray descriptor;
       QDataStream out {&descriptor, QIODevice::WriteOnly};
       out
         << quint16 (2u)
         << quint16 (0u)
         << quint16 (SENDER_TEMPLATE_ID)
-        << quint16 (8u)
+        << quint16 (10u)
         << quint16 (0x8000 + 1u)  // senderCallsign
         << quint16 (0xffff)
         << PSK_REPORTER_PEN
@@ -109,6 +111,12 @@ namespace
         << quint16 (4u)
         << quint16 (0x8000 + 14u) // messageBits, empty when not known
         << quint16 (0xffff)
+        << PSK_REPORTER_PEN
+        << quint16 (0x8000 + 15u) // deltaT, 100 us units, 0x8000 unknown
+        << quint16 (2u)
+        << PSK_REPORTER_PEN
+        << quint16 (0x8000 + 16u) // fractionalFrequency, 1/65536 Hz
+        << quint16 (2u)
         << PSK_REPORTER_PEN;
       setLength (out, descriptor);
       sets.append (descriptor);
@@ -194,9 +202,11 @@ namespace
                                spot.time.toMSecsSinceEpoch () / 1000
 #endif
                                );
-    auto const payload77 = spot.payload77.size () == PAYLOAD77_BYTES ? spot.payload77 : QByteArray {};
+    auto const& extras = spot.extras;
+    auto const payload77 = extras.payload77.size () == PAYLOAD77_BYTES ? extras.payload77 : QByteArray {};
     out << quint8 (payload77.size ());
     out.writeRawData (payload77.constData (), payload77.size ());
+    out << extras.delta_t << extras.fractional_frequency;
     return data;
   }
 

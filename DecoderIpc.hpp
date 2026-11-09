@@ -188,10 +188,19 @@ namespace DecoderIpc
   bool parseStart (QByteArray line, qint32 * generation);
   bool parseCompletion (QByteArray line, Completion * completion);
 
-  // jt9 writes "<DecodePayload77> " and 20 hex digits on the line before an
-  // FT8 or FT4 decode it received as 77 message bits. On success *payload77
-  // holds 10 bytes: the bits first bit most significant, then three zero bits.
-  bool parsePayload77 (QByteArray line, QByteArray * payload77);
+  // What jt9 measured for the FT8 or FT4 decode on the following line.
+  struct DecodeEvidence
+  {
+    bool hasStart {false};
+    double startSeconds {0};    // period start to the first message symbol
+    double frequencyHz {0};     // audio frequency of tone 0
+    QByteArray payload77;       // empty, or 10 bytes: the 77 received bits,
+                                // first bit most significant, then 3 zero bits
+  };
+
+  // Parses "<DecodeEvidence> start=S freq=F bits=B", where S is seconds or
+  // "none", F is Hz, and B is 20 upper-case hex digits or "none".
+  bool parseDecodeEvidence (QByteArray line, DecodeEvidence * evidence);
 }
 
 #endif

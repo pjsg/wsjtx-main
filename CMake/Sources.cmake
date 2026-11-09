@@ -274,6 +274,7 @@ set (wsjt_FSRCS
   lib/C_interface_module.f90
   lib/decoder_ipc_atomic.f90
   lib/decode_completion.f90
+  lib/waveform_fit.f90
   lib/jt9_input_validation.f90
   lib/msk_spectrum.f90
   lib/jpl_ephemeris_status.f90

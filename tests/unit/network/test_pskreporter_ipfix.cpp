@@ -216,52 +216,62 @@ private slots:
       {
         auto const ids = setIds (packet.payload);
         QVERIFY (ids.contains (quint16 (0x50e2)));
-        QVERIFY (ids.contains (quint16 (0x50e4)));
+        QVERIFY (ids.contains (quint16 (0x50e5)));
       }
   }
 
-  void senderTemplateDeclaresMessageBits ()
+  void senderTemplateDeclaresDecoderMeasurements ()
   {
     auto const packets = buildUdpPackets (receiver (), {}, true, 1, 2, 3);
     auto const payload = packets.front ().payload;
 
     auto const offset = setOffset (payload, 2u);
     QVERIFY (offset >= 0);
-    QCOMPARE (u16 (payload, offset + 4), quint16 (0x50e4));
-    QCOMPARE (u16 (payload, offset + 6), quint16 (8u));
+    QCOMPARE (u16 (payload, offset + 4), quint16 (0x50e5));
+    QCOMPARE (u16 (payload, offset + 6), quint16 (10u));
     // The eighth field specifier follows six enterprise fields (8 bytes each)
     // and dateTimeSeconds (4 bytes).
-    auto const field = offset + 8 + 6 * 8 + 4;
-    QCOMPARE (u16 (payload, field), quint16 (0x8000 + 14u));
-    QCOMPARE (u16 (payload, field + 2), quint16 (0xffff));
-    QCOMPARE (u32 (payload, field + 4), quint32 (30351u));
-    QCOMPARE (field + 8, offset + u16 (payload, offset + 2));
+    auto field = offset + 8 + 6 * 8 + 4;
+    for (auto const& expected : {qMakePair (14u, 0xffffu), qMakePair (15u, 2u), qMakePair (16u, 2u)})
+      {
+        QCOMPARE (u16 (payload, field), quint16 (0x8000 + expected.first));
+        QCOMPARE (u16 (payload, field + 2), quint16 (expected.second));
+        QCOMPARE (u32 (payload, field + 4), quint32 (30351u));
+        field += 8;
+      }
+    QCOMPARE (field, offset + u16 (payload, offset + 2));
   }
 
-  void spotRecordCarriesMessageBits_data ()
+  void spotRecordCarriesDecoderMeasurements_data ()
   {
     QTest::addColumn<QByteArray> ("bits");
     QTest::addColumn<QByteArray> ("expected");
+    QTest::addColumn<qint16> ("deltaT");
+    QTest::addColumn<quint16> ("fraction");
     auto const bits = QByteArray::fromHex ("0123456789ABCDEF0120");
-    QTest::newRow ("known") << bits << bits;
-    QTest::newRow ("unknown") << QByteArray {} << QByteArray {};
-    QTest::newRow ("wrong size dropped") << QByteArray::fromHex ("0123") << QByteArray {};
+    QTest::newRow ("known") << bits << bits << qint16 (-1234) << quint16 (0x8000);
+    QTest::newRow ("unknown") << QByteArray {} << QByteArray {} << PSKReporterIPFIX::DELTA_T_UNKNOWN << quint16 (0);
+    QTest::newRow ("wrong size dropped") << QByteArray::fromHex ("0123") << QByteArray {} << qint16 (5000) << quint16 (1);
   }
 
-  void spotRecordCarriesMessageBits ()
+  void spotRecordCarriesDecoderMeasurements ()
   {
     QFETCH (QByteArray, bits);
     QFETCH (QByteArray, expected);
+    QFETCH (qint16, deltaT);
+    QFETCH (quint16, fraction);
     auto s = spot (1);
-    s.payload77 = bits;
+    s.extras.payload77 = bits;
+    s.extras.delta_t = deltaT;
+    s.extras.fractional_frequency = fraction;
 
     auto const packets = buildUdpPackets (receiver (), {s}, false, 1, 2, 3);
     QCOMPARE (packets.size (), 1);
     auto const payload = packets.front ().payload;
-    auto const set = setOffset (payload, 0x50e4);
+    auto const set = setOffset (payload, 0x50e5);
     QVERIFY (set >= 0);
 
-    // Field lengths of template 0x50e4, in order.
+    // Field lengths of template 0x50e5 before messageBits, in order.
     int offset = set + 4;
     for (quint16 length : {quint16 (0xffff), quint16 (5u), quint16 (1u), quint16 (0xffff)
                            , quint16 (0xffff), quint16 (1u), quint16 (4u)})
@@ -270,9 +280,12 @@ private slots:
       }
     QCOMPARE (static_cast<int> (static_cast<quint8> (payload[offset])), expected.size ());
     QCOMPARE (payload.mid (offset + 1, expected.size ()), expected);
+    offset += 1 + expected.size ();
+    QCOMPARE (static_cast<qint16> (u16 (payload, offset)), deltaT);
+    QCOMPARE (u16 (payload, offset + 2), fraction);
     // Only alignment padding follows the record.
     auto const end = set + u16 (payload, set + 2);
-    QVERIFY (end - (offset + 1 + expected.size ()) < 4);
+    QVERIFY (end - (offset + 4) < 4);
   }
 
   void tcpCanUseLargerIpfixPayloads ()

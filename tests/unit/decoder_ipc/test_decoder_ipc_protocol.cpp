@@ -45,9 +45,10 @@ private Q_SLOTS:
   void completionMarkerParsing ();
   void completionMarkerRejections_data ();
   void completionMarkerRejections ();
-  void payloadMarkerParsing ();
-  void payloadMarkerRejections_data ();
-  void payloadMarkerRejections ();
+  void evidenceMarkerParsing ();
+  void evidenceMarkerWithoutStartOrBits ();
+  void evidenceMarkerRejections_data ();
+  void evidenceMarkerRejections ();
 };
 
 void TestDecoderIpcProtocol::layoutMatchesFortran ()
@@ -530,32 +531,50 @@ void TestDecoderIpcProtocol::completionMarkerRejections ()
   QVERIFY (!DecoderIpc::parseCompletion (line, &completion));
 }
 
-void TestDecoderIpcProtocol::payloadMarkerParsing ()
+void TestDecoderIpcProtocol::evidenceMarkerParsing ()
 {
-  QByteArray payload77;
-  QVERIFY (DecoderIpc::parsePayload77 ("<DecodePayload77> 0123456789ABCDEF0120\r\n", &payload77));
-  QCOMPARE (payload77, QByteArray::fromHex ("0123456789ABCDEF0120"));
+  DecoderIpc::DecodeEvidence evidence;
+  QVERIFY (DecoderIpc::parseDecodeEvidence (
+      "<DecodeEvidence> start=-.12345 freq=1234.56250 bits=0123456789ABCDEF0120\r\n", &evidence));
+  QVERIFY (evidence.hasStart);
+  QCOMPARE (evidence.startSeconds, -0.12345);
+  QCOMPARE (evidence.frequencyHz, 1234.5625);
+  QCOMPARE (evidence.payload77, QByteArray::fromHex ("0123456789ABCDEF0120"));
 }
 
-void TestDecoderIpcProtocol::payloadMarkerRejections_data ()
+void TestDecoderIpcProtocol::evidenceMarkerWithoutStartOrBits ()
+{
+  DecoderIpc::DecodeEvidence evidence;
+  evidence.payload77 = "stale";
+  QVERIFY (DecoderIpc::parseDecodeEvidence ("<DecodeEvidence> start=none freq=600.00000 bits=none", &evidence));
+  QVERIFY (!evidence.hasStart);
+  QCOMPARE (evidence.frequencyHz, 600.0);
+  QVERIFY (evidence.payload77.isEmpty ());
+}
+
+void TestDecoderIpcProtocol::evidenceMarkerRejections_data ()
 {
   QTest::addColumn<QByteArray> ("line");
   QTest::newRow ("decode line") << QByteArray {"133430 -12  0.1 1234 ~  CQ K1ABC FN42"};
-  QTest::newRow ("embedded") << QByteArray {"noise <DecodePayload77> 0123456789ABCDEF0120"};
-  QTest::newRow ("short") << QByteArray {"<DecodePayload77> 0123456789ABCDEF012"};
-  QTest::newRow ("long") << QByteArray {"<DecodePayload77> 0123456789ABCDEF01200"};
-  QTest::newRow ("lower case") << QByteArray {"<DecodePayload77> 0123456789abcdef0120"};
-  QTest::newRow ("not hex") << QByteArray {"<DecodePayload77> 0123456789ABCDEF012G"};
-  QTest::newRow ("padding bits set") << QByteArray {"<DecodePayload77> 0123456789ABCDEF0121"};
-  QTest::newRow ("trailing garbage") << QByteArray {"<DecodePayload77> 0123456789ABCDEF0120 x"};
+  QTest::newRow ("embedded") << QByteArray {"noise <DecodeEvidence> start=.5 freq=1000.0 bits=none"};
+  QTest::newRow ("missing field") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0"};
+  QTest::newRow ("extra field") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=none x"};
+  QTest::newRow ("reordered") << QByteArray {"<DecodeEvidence> freq=1000.0 start=.5 bits=none"};
+  QTest::newRow ("bad start") << QByteArray {"<DecodeEvidence> start=x freq=1000.0 bits=none"};
+  QTest::newRow ("bad freq") << QByteArray {"<DecodeEvidence> start=.5 freq=none bits=none"};
+  QTest::newRow ("negative freq") << QByteArray {"<DecodeEvidence> start=.5 freq=-1.0 bits=none"};
+  QTest::newRow ("short bits") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789ABCDEF012"};
+  QTest::newRow ("lower case bits") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789abcdef0120"};
+  QTest::newRow ("padding bits set") << QByteArray {"<DecodeEvidence> start=.5 freq=1000.0 bits=0123456789ABCDEF0121"};
 }
 
-void TestDecoderIpcProtocol::payloadMarkerRejections ()
+void TestDecoderIpcProtocol::evidenceMarkerRejections ()
 {
   QFETCH (QByteArray, line);
-  QByteArray payload77 {"unchanged"};
-  QVERIFY (!DecoderIpc::parsePayload77 (line, &payload77));
-  QCOMPARE (payload77, QByteArray {"unchanged"});
+  DecoderIpc::DecodeEvidence evidence;
+  evidence.payload77 = "unchanged";
+  QVERIFY (!DecoderIpc::parseDecodeEvidence (line, &evidence));
+  QCOMPARE (evidence.payload77, QByteArray {"unchanged"});
 }
 
 QTEST_GUILESS_MAIN (TestDecoderIpcProtocol)

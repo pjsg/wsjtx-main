@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 typedef void *decoder_engine_handle;
-enum { DECODER_ENGINE_ABI = 8, DECODER_MODE_JT4 = 4, DECODER_MODE_FT4 = 5, DECODER_MODE_FT8 = 8,
+enum { DECODER_ENGINE_ABI = 9, DECODER_MODE_JT4 = 4, DECODER_MODE_FT4 = 5, DECODER_MODE_FT8 = 8,
        DECODER_MODE_JT9 = 9, DECODER_MODE_JT65 = 65, DECODER_MODE_Q65 = 66,
        DECODER_MODE_FST4 = 240, DECODER_MODE_FST4W = 241 };
 enum { DECODER_SUPPORT_FT8 = 1, DECODER_SUPPORT_FT4 = 2, DECODER_SUPPORT_JT9 = 4,
@@ -247,17 +247,25 @@ typedef struct {
    interval, totaling 105 symbol intervals. Its start precedes the first
    synchronization-symbol reference by one symbol (0.048 seconds).
    Both origins are template sample zero, independent of initial amplitude.
-   Payload bits are canonical message bits, before mode-specific scrambling. */
+   Payload bits are canonical message bits, before mode-specific scrambling.
+   When the message was received as such, the start and tone-zero frequency
+   are refined by fitting the reference waveform to the 12 kHz audio; the
+   refined frequency is waveform_frequency_hz when has_waveform_frequency is
+   set, and frequency_hz otherwise. */
 typedef struct {
   int8_t payload77[77], tones[79];
   int32_t payload_origin, has_tones, has_waveform_start, method;
   float waveform_start_seconds;
+  int32_t has_waveform_frequency;
+  float waveform_frequency_hz;
 } decoder_ft8_evidence;
 
 typedef struct {
   int8_t payload77[77], tones[103];
   int32_t payload_origin, has_tones, has_waveform_start, method;
   float waveform_start_seconds;
+  int32_t has_waveform_frequency;
+  float waveform_frequency_hz;
 } decoder_ft4_evidence;
 
 typedef struct {

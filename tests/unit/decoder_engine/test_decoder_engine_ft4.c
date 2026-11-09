@@ -43,7 +43,11 @@ static void observe(const decoder_observation *record, void *opaque)
     CHECK(record->ft4.has_tones && record->ft4.has_waveform_start);
     CHECK(!memcmp(record->ft4.payload77, f->payload, 77));
     CHECK(!memcmp(record->ft4.tones, f->tones, 103));
-    CHECK(fabsf(record->ft4.waveform_start_seconds - f->start) < 0.01f);
+    /* Refined from the decoder's 1.5 ms / 1 Hz grid by fitting the reference
+       waveform to the audio. */
+    CHECK(fabsf(record->ft4.waveform_start_seconds - f->start) < 0.001f);
+    CHECK(record->ft4.has_waveform_frequency != 0);
+    CHECK(fabsf(record->ft4.waveform_frequency_hz - 1500.0f) < 0.01f);
     CHECK(fabsf(record->dt_seconds - (f->start + 0.048f - 0.5f)) < 0.01f);
     CHECK(record->ft8.payload_origin == DECODER_PAYLOAD_NONE && record->superfox.kind == 0);
   } else {

@@ -20,6 +20,7 @@ subroutine ft8bvar(residual,spectrum,newdat1,nQSOProgress,nfqso,nftx,napwid, &
   use ft8_bit_metrics, only : ft8_bit_marginals
   use ft8_fft32, only : fft32_first_eight
   use ft8var_waveform_generator, only : gen_ft8wavevar_samples
+  use waveform_fit, only : refine_ft8_waveform
   use ft8_mod1, only : ft8_message_seen,ft8_lookup_call_dt,apsym,mcq,m73,       &
        mrr73,mrrr,icos7,naptypes,nhaptypes,one,graymap, &
        ft8_period_hint,get_ft8_period_hint,retire_ft8_period_hint,       &
@@ -58,6 +59,8 @@ subroutine ft8bvar(residual,spectrum,newdat1,nQSOProgress,nfqso,nftx,napwid, &
   logical :: finite_scores
   real llra(174),llrb(174),llrc(174),llrd(174),llrz(174)
   real qual !ft8md  
+  real tfine,ffine                       !Refined waveform start and frequency
+  logical lfine
   integer*1 message77(77),apmask(174),cw(174),nsmax(8)
   integer itone(79),ip(1),ka(1),nqsoend(3)
   integer, intent(in) :: nQSOProgress,nfqso,nftx,napwid,nthr,ipass,nft8rxfsens, &
@@ -91,6 +94,7 @@ subroutine ft8bvar(residual,spectrum,newdat1,nQSOProgress,nfqso,nftx,napwid, &
   codec => get_ft8_codec_state()
   if(present(knowledge)) codec => knowledge
   if(present(evidence)) evidence=ft8_signal_evidence()
+  lfine=.false.
   has_decoded_payload=.false.
   decoded_payload_message=''
   itone=0
@@ -2956,6 +2960,14 @@ subroutine ft8bvar(residual,spectrum,newdat1,nQSOProgress,nfqso,nftx,napwid, &
         endif
      endif
 
+! Refine start and frequency against the audio before this signal is
+! subtracted from it. Decoding itself keeps the coarse values.
+     if(present(evidence)) then
+        tfine=xdt
+        ffine=f1
+        call refine_ft8_waveform(residual,itone,tfine,ffine,lfine)
+     endif
+
      if(lsubtract) then
         noff=10
         sync0=0.
@@ -3002,6 +3014,11 @@ subroutine ft8bvar(residual,spectrum,newdat1,nQSOProgress,nfqso,nftx,napwid, &
      endif
      evidence%has_waveform_start=1
      evidence%waveform_start_seconds=xdt
+     if(lfine) then
+        evidence%waveform_start_seconds=tfine
+        evidence%has_waveform_frequency=1
+        evidence%waveform_frequency_hz=ffine
+     endif
      evidence%method=iaptype2
      if(has_decoded_payload .and. msg37.eq.decoded_payload_message) &
           evidence%payload_origin=engine_payload_decoded

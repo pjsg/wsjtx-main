@@ -2,6 +2,7 @@ module ft4_decode
    use packjt77, only: pack77_state,pack77_for_state,unpack77_for_state
    use decoder_engine_types, only: ft4_signal_evidence,engine_payload_decoded
    use ft4_codec, only: ft4_tones_from_77bits
+   use waveform_fit, only: refine_ft4_waveform
 
    type :: ft4_decoder
       procedure(ft4_decode_callback), pointer :: callback => null()
@@ -63,6 +64,8 @@ contains
       complex ctwk(2*NSS),ctwk2(2*NSS,-16:16)
 
       real a(5)
+      real tfine,ffine                        !Refined waveform start and frequency
+      logical lfine
       real bitmetrics(2*NN,3)
       real dd(NMAX)
       real llr(2*ND),llra(2*ND),llrb(2*ND),llrc(2*ND),llrd(2*ND)
@@ -454,6 +457,18 @@ contains
                      evidence%has_tones=1
                      evidence%waveform_start_seconds=real(ibest)/666.67-real(NSPS)/12000.0
                      evidence%has_waveform_start=1
+! Refine start and frequency against the audio before this signal is
+! subtracted from it. Decoding itself keeps the coarse values.
+                     tfine=evidence%waveform_start_seconds
+                     ffine=f1
+                     call timer('fit_ft4 ',0)
+                     call refine_ft4_waveform(dd,i4tone,tfine,ffine,lfine)
+                     call timer('fit_ft4 ',1)
+                     if(lfine) then
+                        evidence%waveform_start_seconds=tfine
+                        evidence%has_waveform_frequency=1
+                        evidence%waveform_frequency_hz=ffine
+                     endif
                      if(dosubtract) then
                         dt=real(ibest)/666.67
                         call timer('subtract',0)

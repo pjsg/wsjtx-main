@@ -9,6 +9,7 @@ subroutine ft8b(dd0,newdat,nQSOProgress,nfqso,nftx,ndepth,nzhsym,lapon,     &
   use packjt77_schema, only: PACK77_TYPE1_RR73_TAIL
   use ft8_codec_context, only: get_ft8_codec_state
   use decoder_engine_types, only: ft8_signal_evidence,engine_payload_decoded
+  use waveform_fit, only: refine_ft8_waveform
   include 'ft8_params.f90'
   parameter(NP2=2812)
   character*37 msg37
@@ -20,6 +21,8 @@ subroutine ft8b(dd0,newdat,nQSOProgress,nfqso,nftx,ndepth,nzhsym,lapon,     &
   real bmeta(174),bmetb(174),bmetc(174),bmetd(174),bmete(174)
   real llra(174),llrb(174),llrc(174),llrd(174),llre(174),llrz(174)           !Soft symbols
   real dd0(15*12000)
+  real tfine,ffine                       !Refined waveform start and frequency
+  logical lfine
   real ss(9)
   real temp(3)
   integer*1 message77(77),message91(91),apmask(174),cw(174)
@@ -472,6 +475,16 @@ subroutine ft8b(dd0,newdat,nQSOProgress,nfqso,nftx,ndepth,nzhsym,lapon,     &
 ! If we get this far: valid codeword, valid (i3,n3), nonquirky message.
      nbadcrc=0
      call get_ft8_tones_from_77bits(message77,itone)
+! Refine start and frequency against the audio before this signal is
+! subtracted from it. Decoding itself keeps the coarse values.
+     lfine=.false.
+     if(present(evidence)) then
+        tfine=xdt
+        ffine=f1
+        call timer('fit_ft8 ',0)
+        call refine_ft8_waveform(dd0,itone,tfine,ffine,lfine)
+        call timer('fit_ft8 ',1)
+     endif
      if(lsubtract) then
         call timer('sub_ft8a',0)
         call subtractft8(dd0,itone,f1,xdt,.false.)
@@ -507,6 +520,11 @@ subroutine ft8b(dd0,newdat,nQSOProgress,nfqso,nftx,ndepth,nzhsym,lapon,     &
        evidence%has_tones=1
        evidence%has_waveform_start=1
        evidence%waveform_start_seconds=xdt
+       if(lfine) then
+          evidence%waveform_start_seconds=tfine
+          evidence%has_waveform_frequency=1
+          evidence%waveform_frequency_hz=ffine
+       endif
        evidence%method=iaptype
     endif
     return

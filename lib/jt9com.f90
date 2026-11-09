@@ -1,7 +1,7 @@
   use, intrinsic :: iso_c_binding, only: c_int, c_int64_t, c_short, c_float, c_char, c_bool
   include 'constants.f90'
 
-  integer(c_int), parameter :: DECODER_IPC_VERSION = 5
+  integer(c_int), parameter :: DECODER_IPC_VERSION = 6
   integer(c_int), parameter :: DECODER_IPC_IDLE = 0
   integer(c_int), parameter :: DECODER_IPC_READY = 1
   integer(c_int), parameter :: DECODER_IPC_DECODING = 2

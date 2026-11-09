@@ -22,6 +22,23 @@ namespace PSKReporterIPFIX
     QString rig_information;
   };
 
+  // deltaT (30351.15) value meaning unknown.
+  constexpr qint16 DELTA_T_UNKNOWN = -0x8000;
+
+  // Measurements beyond what the decoded text gives.
+  struct SpotExtras
+  {
+    // Empty, or the 77 message bits the spot was decoded from as 10 bytes:
+    // first bit most significant, then three zero bits.
+    QByteArray payload77;
+    // Message start relative to the start of the transmission period, in
+    // 100 us units.
+    qint16 delta_t {DELTA_T_UNKNOWN};
+    // Fractional part of the frequency, in 1/65536 Hz. Zero when the
+    // frequency is only known to the nearest Hz.
+    quint16 fractional_frequency {0};
+  };
+
   struct Spot
   {
     QString callsign;
@@ -30,9 +47,7 @@ namespace PSKReporterIPFIX
     Radio::Frequency frequency;
     QString mode;
     QDateTime time;
-    // Empty, or the 77 message bits the spot was decoded from as 10 bytes:
-    // first bit most significant, then three zero bits.
-    QByteArray payload77;
+    SpotExtras extras;
   };
 
   struct Packet

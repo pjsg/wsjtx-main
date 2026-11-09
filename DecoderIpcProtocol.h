@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define DECODER_IPC_VERSION 5
+#define DECODER_IPC_VERSION 6
 
 enum decoder_ipc_state
 {

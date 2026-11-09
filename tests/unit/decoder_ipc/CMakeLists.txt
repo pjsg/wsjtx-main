@@ -23,7 +23,8 @@ else ()
 endif ()
 add_test (NAME test_decoder_ipc_protocol COMMAND test_decoder_ipc_protocol)
 
-if (EXISTS "${CMAKE_SOURCE_DIR}/samples/FT8/210703_133430.wav")
+if (EXISTS "${CMAKE_SOURCE_DIR}/samples/FT8/210703_133430.wav"
+    AND EXISTS "${CMAKE_SOURCE_DIR}/samples/FT4/000000_000002.wav")
   add_executable (test_decoder_payload77
     test_decoder_payload77.cpp
     ${CMAKE_SOURCE_DIR}/DecoderIpc.cpp
@@ -32,7 +33,8 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/samples/FT8/210703_133430.wav")
   target_include_directories (test_decoder_payload77 PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
   target_compile_definitions (test_decoder_payload77 PRIVATE
     JT9_TEST_EXECUTABLE="$<TARGET_FILE:jt9>"
-    FT8_SAMPLE_WAV="${CMAKE_SOURCE_DIR}/samples/FT8/210703_133430.wav")
+    FT8_SAMPLE_WAV="${CMAKE_SOURCE_DIR}/samples/FT8/210703_133430.wav"
+    FT4_SAMPLE_WAV="${CMAKE_SOURCE_DIR}/samples/FT4/000000_000002.wav")
   add_dependencies (test_decoder_payload77 jt9)
   target_link_libraries (test_decoder_payload77 wsjt_cxx wsjt_fort_common Qt5::Test)
   add_test (NAME test_decoder_payload77 COMMAND test_decoder_payload77)

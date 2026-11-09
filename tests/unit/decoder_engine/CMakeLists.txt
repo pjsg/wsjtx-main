@@ -14,6 +14,12 @@ add_test (NAME prepare_ft8_engine_wav COMMAND test_decoder_engine
   --write-wav ${CMAKE_CURRENT_BINARY_DIR}/ft8-engine.wav)
 set_tests_properties (prepare_ft8_engine_wav PROPERTIES FIXTURES_SETUP ft8_engine_wav TIMEOUT 15)
 
+add_executable (test_waveform_fit test_waveform_fit.f90)
+set_target_properties (test_waveform_fit PROPERTIES LINKER_LANGUAGE CXX)
+wsjt_link_common_fortran (test_waveform_fit)
+add_test (NAME test_waveform_fit COMMAND test_waveform_fit)
+set_tests_properties (test_waveform_fit PROPERTIES TIMEOUT 120)
+
 add_executable (test_decoder_engine_ft4 test_decoder_engine_ft4.c)
 set_target_properties (test_decoder_engine_ft4 PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories (test_decoder_engine_ft4 PRIVATE ${CMAKE_SOURCE_DIR})

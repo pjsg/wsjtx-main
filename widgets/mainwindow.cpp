@@ -7076,11 +7076,18 @@ void MainWindow::readFromStdout()                             //readFromStdout
     [this, &all_decodes, &preparationContext, &decodeCompleted,
      &decodeContext, bDisplayPoints]
     (DecoderBackend::Output const& output) {
-    // A payload line belongs only to the decode line that follows it.
-    if (DecoderBackend::Output::Kind::Record != output.kind) m_pendingPayload77.clear ();
+    // An evidence line belongs only to the decode line that follows it.
+    if (DecoderBackend::Output::Kind::Record != output.kind) m_pendingEvidence.reset ();
     if (handleDecoderOutput (output, decodeCompleted)) return;
-    if (DecoderIpc::parsePayload77 (output.text, &m_pendingPayload77)) return;
-    auto const payload77 = std::exchange (m_pendingPayload77, QByteArray {});
+    {
+      DecoderIpc::DecodeEvidence evidence;
+      if (DecoderIpc::parseDecodeEvidence (output.text, &evidence))
+        {
+          m_pendingEvidence = evidence;
+          return;
+        }
+    }
+    auto const evidence = std::exchange (m_pendingEvidence, std::nullopt);
     filtered = false;
     ignored = false;
     m_muted = false;
@@ -7465,7 +7472,7 @@ void MainWindow::readFromStdout()                             //readFromStdout
             DecodedText FST4W_post {QString::fromUtf8 (line_read.left (p).constData ())};
             pskPost(FST4W_post, decodeContext);
           } else {
-            pskPost(decodedtext, decodeContext, payload77);
+            pskPost(decodedtext, decodeContext, evidence ? &*evidence : nullptr);
           }
         }
         if((m_mode=="JT4" or m_mode=="JT65" or m_mode=="Q65")
@@ -7537,7 +7544,7 @@ void MainWindow::pskPost (DecodedText const& decodedtext)
 
 void MainWindow::pskPost (DecodedText const& decodedtext,
                           DecodeOperatingContext const& context,
-                          QByteArray const& payload77)
+                          DecoderIpc::DecodeEvidence const* evidence)
 {
   auto const baseCall = Radio::base_callsign (context.myCall);
   if (context.diskData || !m_config.spot_to_psk_reporter() || decodedtext.isLowConfidence ()
@@ -7556,9 +7563,29 @@ void MainWindow::pskPost (DecodedText const& decodedtext,
   }
   int snr = decodedtext.snr();
   Frequency frequency = context.periodFrequency + audioFrequency;
+  PSKReporterIPFIX::SpotExtras extras;
+  if (evidence) {
+    extras.payload77 = evidence->payload77;
+    if (evidence->hasStart) {
+      // Offset from the start of the period, which for FT4 is half a second
+      // after the whole second the spot time carries.
+      auto const units = qRound64 (evidence->startSeconds * 10000.0);
+      if (units > -0x8000 && units <= 0x7fff) extras.delta_t = static_cast<qint16> (units);
+    }
+    // The spot frequency is then the dial plus the whole Hz of the audio
+    // frequency, with the remainder in the fractional field.
+    auto wholeHz = static_cast<qint64> (std::floor (evidence->frequencyHz));
+    auto fraction = qRound64 ((evidence->frequencyHz - wholeHz) * 65536.0);
+    if (fraction > 0xffff) {
+      ++wholeHz;
+      fraction = 0;
+    }
+    frequency = context.periodFrequency + wholeHz;
+    extras.fractional_frequency = static_cast<quint16> (fraction);
+  }
   if(grid.contains (MainWindow::grid_regexp)  || decodedtext.string().contains(" CQ ")) {
 //    qDebug() << "To PSKreporter:" << deCall << grid << frequency << msgmode << snr;
-    if (!m_psk_Reporter.addRemoteStation (deCall, grid, frequency, msgmode, snr, qSpotTime, payload77))
+    if (!m_psk_Reporter.addRemoteStation (deCall, grid, frequency, msgmode, snr, qSpotTime, extras))
       {
         showStatusMessage (tr ("PSK Reporter spot queue full; oldest spot dropped"));
       }

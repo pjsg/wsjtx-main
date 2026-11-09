@@ -10,7 +10,7 @@ module decoder_callbacks
   use q65_decode
   use streaming_emit, only: streaming_emit_enabled, streaming_emit_decode
   use decoder_engine_types
-  use decode_completion_module, only: write_decode_payload_record
+  use decode_completion_module, only: write_decode_evidence_record
   use jt65_host_support, only: write_jt65_averages
   use, intrinsic :: iso_c_binding, only: c_ptr,c_null_ptr,c_char,c_null_char
 
@@ -495,10 +495,11 @@ contains
        call streaming_emit_decode("FT8", context_nutc, snr, dt, nint(freq), decoded0, &
             ap=merge(9, nap, nap.ge.9))
     else
-       if(present(evidence)) then
-          if(evidence%payload_origin==engine_payload_decoded) &
-               call write_decode_payload_record(evidence%payload77)
-       endif
+       if(present(evidence)) call write_decode_evidence_record( &
+            evidence%has_waveform_start/=0, &
+            evidence%waveform_start_seconds+context%waveform_input_offset_seconds, &
+            merge(evidence%waveform_frequency_hz,freq,evidence%has_waveform_frequency/=0), &
+            evidence%payload_origin==engine_payload_decoded,evidence%payload77)
        write(*,1000) context_nutc,snr,dt,nint(freq),decoded0,annot
     end if
 1000 format(i6.6,i4,f5.1,i5,' ~ ',1x,a37,1x,a2)
@@ -643,10 +644,11 @@ contains
        if (i0.gt.0) call streaming_emit_decode("FT8", context_nutc, snr, dt, nint(freq), decoded0, &
             ap=nap)
     else
-       if(present(evidence)) then
-          if(evidence%payload_origin==engine_payload_decoded) &
-               call write_decode_payload_record(evidence%payload77)
-       endif
+       if(present(evidence)) call write_decode_evidence_record( &
+            evidence%has_waveform_start/=0, &
+            evidence%waveform_start_seconds+context%waveform_input_offset_seconds, &
+            merge(evidence%waveform_frequency_hz,freq,evidence%has_waveform_frequency/=0), &
+            evidence%payload_origin==engine_payload_decoded,evidence%payload77)
        if(i0.le.0) write(*,1000) context_nutc,snr,dt,nint(freq),decoded0(1:22),annot
        if(i0.gt.0) write(*,1001) context_nutc,snr,dt,nint(freq),decoded0,annot
     end if
@@ -770,8 +772,12 @@ contains
     if (streaming_emit_enabled()) then
        call streaming_emit_decode("FT4", context_nutc, snr, dt, nint(freq), decoded0, ap=nap)
     else
-       if(evidence%payload_origin==engine_payload_decoded) &
-            call write_decode_payload_record(evidence%payload77)
+       ! The FT4 reference waveform has one ramp symbol (576 samples) before
+       ! the first message symbol.
+       call write_decode_evidence_record(evidence%has_waveform_start/=0, &
+            evidence%waveform_start_seconds+576.0/12000.0+context%waveform_input_offset_seconds, &
+            merge(evidence%waveform_frequency_hz,freq,evidence%has_waveform_frequency/=0), &
+            evidence%payload_origin==engine_payload_decoded,evidence%payload77)
        write(*,1001) context_nutc,snr,dt,nint(freq),decoded0,annot
     end if
 1001 format(i6.6,i4,f5.1,i5,' + ',1x,a37,1x,a2)

@@ -9,12 +9,13 @@ module decode_completion_module
   public :: set_decode_completion
   public :: write_decode_completion
   public :: write_decode_progress
-  public :: enable_decode_payload_records
-  public :: write_decode_payload_record
+  public :: enable_decode_evidence_records
+  public :: write_decode_evidence_record
 
-  ! Under the GUI, jt9 precedes a decode line with the 77 message bits it
-  ! was decoded from. Standalone jt9 output is left unchanged.
-  logical, save :: payload_records_enabled = .false.
+  ! Under the GUI, jt9 precedes an FT8 or FT4 decode line with what the
+  ! decoder measured: message start, precise frequency, and message bits.
+  ! Standalone jt9 output is left unchanged.
+  logical, save :: evidence_records_enabled = .false.
 
   type :: decode_completion_result
      logical :: available = .false.
@@ -93,31 +94,48 @@ contains
     call decoder_ipc_progress_report(generation)
   end subroutine write_decode_progress
 
-  subroutine enable_decode_payload_records()
-    payload_records_enabled = .true.
-  end subroutine enable_decode_payload_records
+  subroutine enable_decode_evidence_records()
+    evidence_records_enabled = .true.
+  end subroutine enable_decode_evidence_records
 
-  ! Writes '<DecodePayload77> ' and 20 hex digits: the 77 bits, first bit
-  ! most significant, then three zero bits.
-  subroutine write_decode_payload_record(payload77)
+  ! Writes, ahead of an FT8 or FT4 decode line,
+  !   <DecodeEvidence> start=S freq=F bits=B
+  ! S: seconds from the start of the input (the period) to the start of the
+  !    message's first symbol, or 'none'.
+  ! F: audio frequency of tone 0, Hz.
+  ! B: 20 hex digits of the 77 received message bits, first bit most
+  !    significant, then three zero bits; 'none' when the bits were not
+  !    received as such (a7/a8 hypotheses).
+  subroutine write_decode_evidence_record(has_start, start_seconds, frequency_hz, &
+       has_payload, payload77)
     use iso_fortran_env, only: int8
+    logical, intent(in) :: has_start, has_payload
+    real, intent(in) :: start_seconds, frequency_hz
     integer(int8), intent(in) :: payload77(77)
     character(len=16), parameter :: digits = '0123456789ABCDEF'
-    character(len=20) :: hex
+    character(len=20) :: bits
+    character(len=24) :: start, freq
     integer :: i, j, nibble
 
-    if (.not. payload_records_enabled) return
-    do i = 1, 20
-       nibble = 0
-       do j = 1, 4
-          nibble = 2 * nibble
-          if (4 * (i - 1) + j <= 77) then
-             if (payload77(4 * (i - 1) + j) /= 0) nibble = nibble + 1
-          end if
+    if (.not. evidence_records_enabled) return
+    bits = 'none'
+    if (has_payload) then
+       do i = 1, 20
+          nibble = 0
+          do j = 1, 4
+             nibble = 2 * nibble
+             if (4 * (i - 1) + j <= 77) then
+                if (payload77(4 * (i - 1) + j) /= 0) nibble = nibble + 1
+             end if
+          end do
+          bits(i:i) = digits(nibble + 1:nibble + 1)
        end do
-       hex(i:i) = digits(nibble + 1:nibble + 1)
-    end do
-    write(*,'(a,a)') '<DecodePayload77> ', hex
-  end subroutine write_decode_payload_record
+    end if
+    start = 'none'
+    if (has_start) write(start, '(f0.5)') start_seconds
+    write(freq, '(f0.5)') frequency_hz
+    write(*,'(6a)') '<DecodeEvidence> start=', trim(adjustl(start)), &
+         ' freq=', trim(adjustl(freq)), ' bits=', trim(bits)
+  end subroutine write_decode_evidence_record
 
 end module decode_completion_module
